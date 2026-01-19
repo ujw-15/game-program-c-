@@ -1,98 +1,66 @@
-#include<stdio.h>
+ï»¿#include<stdio.h>
 #include<stdlib.h>
-#include<time.h>
 
-void shuffle(int array[], int size)
+void load(const char* fileName)
 {
-	for (int i = 0; i < size; i++)
-	{
-		int seed = rand() % size;
+	FILE* file = fopen(fileName, "r");
+	int count = 0;
+	int character = '\0';
 
-		int tmp = array[seed];
 
-		array[seed] = array[i];
+while ((character = fgetc(file)) != EOF)
+{
+	count++;
+}
 
-		array[i] = tmp;
-	}
+rewind(file);
+
+char* buffer = malloc(count + 1);
+
+buffer[count] = NULL;
+
+fread(buffer, sizeof(char), count, file);
+
+// ì²« ë²ˆì§¸ ë§¤ê°œë³€ìˆ˜ : ì½ì€ ë°ì´í„°ë¥¼ ì €ìž¥í•  ë©”ëª¨ë¦¬ ë²„í¼ì˜ í¬ì¸í„° ë³€ìˆ˜
+// ë‘ ë²ˆì¨° ë§¤ê°œë³€ìˆ˜ : ê° ë°ì´í„° í•­ëª©ì˜ í¬ê¸°
+// ì„¸ ë²ˆì¨° ë§¤ê°œë³€ìˆ˜ : ë°ì´í„°ë¥¼ ì½ì–´ì˜¬ í•­ëª©ì˜ ìˆ˜
+// ë„¤ ë²ˆì§¸ ë§¤ê°œ ë³€ìˆ˜ : ë°ì´í„°ë¥¼ ì½ì–´ì˜¬ íŒŒì¼ì˜ í¬ì¸í„° ë³€ìˆ˜
+
+printf("%s", buffer);
+
+fclose(file);
+
+free(buffer);
+
 }
 
 int main()
 {
-#pragma region ÀÇ»ç ³­¼ö
-	// 0 ~ 32767 »çÀÌÀÇ ³­¼ö °ªÀ» ¹ÝÈ¯ÇÏ´Â ÇÔ¼öÀÔ´Ï´Ù.
+#pragma region íŒŒì¼ ìž…ì¶œë ¥
 
-	// UTC ±âÁØÀ¸·Î 1970³â 1¿ù 1ÀÏ 0½Ã 0ºÐ 0ÃÊºÎÅÍ °æ°úµÈ
-	// ½Ã°£À» ÃÊ(sec)·Î ¹ÝÈ¯ÇÏ´Â ÇÔ¼öÀÔ´Ï´Ù.
+#pragma region íŒŒì¼ ì“°ê¸°
 
-	// srand : rand(°¡ »ç¿ëÇÒ ÃÊ±â°ª(seed)À» ¼³Á¤ÇÏ´Â ÇÔ¼ö
+	// ì²« ë²ˆì¨° ë§¤ê°œ ë³€ìˆ˜ (íŒŒì¼ì˜ ì´ë¦„)
+	// ë‘ ë²ˆì§¸ ë§¤ê°œ ë³€ìˆ˜ (íŒŒì¼ì˜ ìž…ì¶œë ¥ ëª¨ë“œ)
 
-	//srand(time(NULL));
-	//
-	//int random = rand() % 10 + 1;
-	//
-	//printf("random : %d\n", random);
+	// FILE* file = fopen("data.txt","w");
+	// fputs(Character Information\n",file);
+	// fputs("Health : \n", file);
+	// fputs("ATTACK : \n", file);
+	// fputs("Defense : \n", file);
 
+	// fclose(file);
+#pragma endregion
+
+#pragma region íŒŒì¼ ì½ê¸°
+
+	// load("Resources/tvz.txt");
 
 #pragma endregion
 
-#pragma region  ¼ÅÇÃ ÇÔ¼ö
-
-//	int array[] = { 1,2,3,4,5,6,7,8,9,10 };
-//	int size = sizeof(array) / sizeof(array[0]);
-//
-//	srand(time(NULL));
-//
-//	shuffle(array, size);
-//	
-//	for (int i = 0; i < size; i++)
-//	{
-//		printf("array[%d]ÀÇ °ª: %d\n", i, array[i]);
-//	}
-
-
-#pragma endregion
-
-#pragma region UP - DOWN °ÔÀÓ
-//
-//	srand(time(NULL));
-//
-//	int random = rand() % 50 + 1;
-//	int life = 5;
-//	int num;
-//
-//	while (life > 0)
-//	{
-//		printf("LIFE : %d\n", life);
-//		printf("Á¤¼ö¸¦ ÀÔ·ÂÇÏ½Ã¿À(1~50): ");
-//		scanf_s("%d", &num);
-//		printf("\n");
-//
-//		if (num < random)
-//		{
-//			life--;
-//			printf("ÄÄÇ»ÅÍ°¡ °¡Áö°í ÀÖ´Â °ªº¸´Ù ÀÛ½À´Ï´Ù.\n");
-//			
-//		}
-//		else if (num > random)
-//		{
-//			life--;
-//			printf("ÄÄÇ»ÅÍ°¡ °¡Áö°í ÀÖ´Â °ªº¸´Ù Å®´Ï´Ù.\n");
-//			
-//		}
-//		else
-//		{
-//			printf("ÄÄÇ»ÅÍ°¡ °¡Áö°í ÀÖ´Â °ªÀ» ¸ÂÃß¾ú½À´Ï´Ù.\n");
-//			printf("Victory\n");
-//			break;
-//		}
-//	}
-//	if (life == 0) {
-//		printf("Defeat\n");
-//	}
-//	
-//	printf("´ä: %d", random);
 
 #pragma endregion
 
 	return 0;
+
 }

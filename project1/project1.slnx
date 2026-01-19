@@ -4,5 +4,6 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="../class1th (Input System)/class1th (Input System).vcxproj" Id="a36cd9f4-2825-4d93-8501-e4b5b872be2c" />
+  <Project Path="../class2th (Time)/class2th (Time).vcxproj" Id="44b92b82-b561-44c9-bd22-722a52e48d93" />
   <Project Path="project1.vcxproj" Id="2df22971-0049-4709-918c-13f66a55fbcb" />
 </Solution>
