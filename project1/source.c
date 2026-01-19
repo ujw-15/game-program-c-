@@ -1,62 +1,98 @@
 #include<stdio.h>
-#include<windows.h>
+#include<stdlib.h>
+#include<time.h>
 
-#define SIZE 10
+void shuffle(int array[], int size)
+{
+	for (int i = 0; i < size; i++)
+	{
+		int seed = rand() % size;
+
+		int tmp = array[seed];
+
+		array[seed] = array[i];
+
+		array[i] = tmp;
+	}
+}
 
 int main()
 {
-#pragma region 포인터 변수
+#pragma region 의사 난수
+	// 0 ~ 32767 사이의 난수 값을 반환하는 함수입니다.
+
+	// UTC 기준으로 1970년 1월 1일 0시 0분 0초부터 경과된
+	// 시간을 초(sec)로 반환하는 함수입니다.
+
+	// srand : rand(가 사용할 초기값(seed)을 설정하는 함수
+
+	//srand(time(NULL));
 	//
-	//	const char* dialog[SIZE];
+	//int random = rand() % 10 + 1;
 	//
-	//	dialog[0] = "안녕하세요?";
-	//	dialog[1] = "누구세요?";
-	//	dialog[2] = "의뢰를 맡은 탐정입니다.";
-	//	dialog[3] = "그러시군요";
-	//	dialog[4] = "혹시 사건현장을 둘러봐도 되겠습니까?";
-	//	dialog[5] = "네 그럼요.";
-	//	dialog[6] = "이상하리만치 특별한 점은 없네요";
-	//	dialog[7] = "그러게요..";
-	//	dialog[8] = "피의자 시체는 어디죠?";
-	//	dialog[9] = "....";
-	//
-	//	// 0x0000 : 이전에 누른 적이 없고 호출 시점에도 눌려있지 않은 상태
-	//
-	//	// 0x0001 : 이전에 누른 적이 있고 호출 시점에는 눌려있지 않은 상태
-	//
-	//	// 0x8000 :  이전에 누른 적이 없고 호풀 시점에는 눌려있는 상태
-	//
-	//	// 0x8001 :  이전에 누른 적이 있고 호풀 시점에도 눌려있는 상태
-	//
-	//	const char* who[2] = { "탐정","의뢰인" };
-	//	int i = 0;
-	//	while (i < SIZE)
-	//	{
-	//		if (GetAsyncKeyState(VK_SPACE) & 0x0001)
-	//		{
-	//			printf("%s : %s\n", who[i % 2], dialog[i]);
-	//			i++;
-	//
-	//			if (i >= SIZE)
-	//				break;
-	//
-	//			// 풀이
-	//
-	//			if (i % 2 == 0) {
-	//				printf("탐정 : %s\n\n", dialog[i]);
-	//			}
-	//			else
-	//			{
-	//				printf("의뢰인 : %s\n\n", dialog[i]);
-	//			}
-	//			i++;
-	//		}
-	//	}
-	//
-	//	printf("대화가 종료되었습니다.");
-	//
+	//printf("random : %d\n", random);
+
+
 #pragma endregion
 
+#pragma region  셔플 함수
+
+//	int array[] = { 1,2,3,4,5,6,7,8,9,10 };
+//	int size = sizeof(array) / sizeof(array[0]);
+//
+//	srand(time(NULL));
+//
+//	shuffle(array, size);
+//	
+//	for (int i = 0; i < size; i++)
+//	{
+//		printf("array[%d]의 값: %d\n", i, array[i]);
+//	}
+
+
+#pragma endregion
+
+#pragma region UP - DOWN 게임
+//
+//	srand(time(NULL));
+//
+//	int random = rand() % 50 + 1;
+//	int life = 5;
+//	int num;
+//
+//	while (life > 0)
+//	{
+//		printf("LIFE : %d\n", life);
+//		printf("정수를 입력하시오(1~50): ");
+//		scanf_s("%d", &num);
+//		printf("\n");
+//
+//		if (num < random)
+//		{
+//			life--;
+//			printf("컴퓨터가 가지고 있는 값보다 작습니다.\n");
+//			
+//		}
+//		else if (num > random)
+//		{
+//			life--;
+//			printf("컴퓨터가 가지고 있는 값보다 큽니다.\n");
+//			
+//		}
+//		else
+//		{
+//			printf("컴퓨터가 가지고 있는 값을 맞추었습니다.\n");
+//			printf("Victory\n");
+//			break;
+//		}
+//	}
+//	if (life == 0) {
+//		printf("Defeat\n");
+//	}
+//	
+//	printf("답: %d", random);
+
+#pragma endregion
 
 	return 0;
 }

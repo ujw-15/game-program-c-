@@ -5,6 +5,9 @@
     {
       "AbsoluteMoniker": "D:0:0:{2DF22971-0049-4709-918C-13F66A55FBCB}|project1.vcxproj|C:\\Users\\ujw12\\OneDrive\\Desktop\\game-program-c-\\project1\\source.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{2DF22971-0049-4709-918C-13F66A55FBCB}|project1.vcxproj|solutionrelative:source.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A36CD9F4-2825-4D93-8501-E4B5B872BE2C}|..\\class1th (Input System)\\class1th (Input System).vcxproj|C:\\Users\\ujw12\\OneDrive\\Desktop\\game-program-c-\\class1th (Input System)\\source.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
   ],
   "DocumentGroupContainers": [
@@ -14,11 +17,24 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Bookmark",
               "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "source.c",
+              "DocumentMoniker": "C:\\Users\\ujw12\\OneDrive\\Desktop\\game-program-c-\\class1th (Input System)\\source.c",
+              "RelativeDocumentMoniker": "..\\class1th (Input System)\\source.c",
+              "ToolTip": "C:\\Users\\ujw12\\OneDrive\\Desktop\\game-program-c-\\class1th (Input System)\\source.c",
+              "RelativeToolTip": "..\\class1th (Input System)\\source.c",
+              "ViewState": "AgIAAB8AAAAAAAAAAAAgwD0AAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
+              "WhenOpened": "2026-01-19T13:04:59.119Z",
+              "EditorCaption": ""
             },
             {
               "$type": "Document",
@@ -28,7 +44,7 @@
               "RelativeDocumentMoniker": "source.c",
               "ToolTip": "C:\\Users\\ujw12\\OneDrive\\Desktop\\game-program-c-\\project1\\source.c",
               "RelativeToolTip": "source.c",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAD0AAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAGEAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
               "WhenOpened": "2026-01-19T13:03:05.301Z",
               "EditorCaption": ""
