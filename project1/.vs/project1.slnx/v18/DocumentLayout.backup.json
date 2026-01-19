@@ -1,0 +1,41 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\ujw12\\OneDrive\\Desktop\\game-program-c-\\project1\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{2DF22971-0049-4709-918C-13F66A55FBCB}|project1.vcxproj|C:\\Users\\ujw12\\OneDrive\\Desktop\\game-program-c-\\project1\\source.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{2DF22971-0049-4709-918C-13F66A55FBCB}|project1.vcxproj|solutionrelative:source.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "source.c",
+              "DocumentMoniker": "C:\\Users\\ujw12\\OneDrive\\Desktop\\game-program-c-\\project1\\source.c",
+              "RelativeDocumentMoniker": "source.c",
+              "ToolTip": "C:\\Users\\ujw12\\OneDrive\\Desktop\\game-program-c-\\project1\\source.c",
+              "RelativeToolTip": "source.c",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAD0AAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
+              "WhenOpened": "2026-01-19T13:03:05.301Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
