@@ -1,3 +1,2 @@
 ﻿  source.c
-C:\Users\ujw12\OneDrive\Desktop\game-program-c-\project1\source.c(20,15): warning C4047: '=': 'char'의 간접 참조 수준이 'void *'과(와) 다릅니다.
   project1.vcxproj -> C:\Users\ujw12\OneDrive\Desktop\game-program-c-\project1\x64\Debug\project1.exe
