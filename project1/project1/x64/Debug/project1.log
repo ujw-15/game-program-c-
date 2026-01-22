@@ -1,3 +1,2 @@
 ﻿  source.c
-C:\Users\ujw12\OneDrive\Desktop\game-program-c-\project1\source.c(76,44): warning C4267: '함수': 'size_t'에서 'DWORD'(으)로 변환하면서 데이터가 손실될 수 있습니다.
   project1.vcxproj -> C:\Users\ujw12\OneDrive\Desktop\game-program-c-\project1\x64\Debug\project1.exe

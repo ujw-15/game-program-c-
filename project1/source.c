@@ -1,136 +1,75 @@
 ﻿#include <stdio.h>
 #include <conio.h>
-#include <windows.h>
+#include <Windows.h>
 
-#define UP 72
-#define LEFT 75
-#define RIGHT 77
-#define DOWN 80
+#define H 8
+#define W 15
 
-int screenIndex;
-HANDLE screen[2];
 
-void Initialize()
-{
-	CONSOLE_CURSOR_INFO cursor;
+typedef struct {
+	int x, y;
+} Player;
 
-	// 화면 버퍼를 2개 생성합니다.
-	screen[0] = CreateConsoleScreenBuffer
-	(
-		GENERIC_READ | GENERIC_WRITE,
-		0, NULL, CONSOLE_TEXTMODE_BUFFER, NULL
-	);
+void gotoxy(int x, int y) {
+	COORD pos = { x, y };
 
-	screen[1] = CreateConsoleScreenBuffer
-	(
-		GENERIC_READ | GENERIC_WRITE,
-		0, NULL, CONSOLE_TEXTMODE_BUFFER, NULL
-	);
-
-	cursor.bVisible = FALSE;
-
-	SetConsoleCursorInfo(screen[0], &cursor);
-	SetConsoleCursorInfo(screen[1], &cursor);
+	SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), pos);
 }
 
-void Flip()
-{
-	SetConsoleActiveScreenBuffer(screen[screenIndex]);
 
-	screenIndex = !screenIndex;
-}
-
-void Clear()
-{
-	COORD position = { 0, 0 };
-
-	DWORD dword;
-
-	CONSOLE_SCREEN_BUFFER_INFO buffer;
-
-	HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
-
-	GetConsoleScreenBufferInfo(console, &buffer);
-
-	int width = buffer.srWindow.Right - buffer.srWindow.Left + 1;
-	int height = buffer.srWindow.Bottom - buffer.srWindow.Top + 1;
-
-	FillConsoleOutputCharacter
-	(
-		screen[screenIndex], ' ', width * height, position, &dword
-	);
-}
-
-void Release()
-{
-	CloseHandle(screen[0]);
-	CloseHandle(screen[1]);
-}
-
-void Render(int x, int y, const char* character)
-{
-	DWORD dword;
-	COORD position = { x, y };
-
-	SetConsoleCursorPosition(screen[screenIndex], position);
-	WriteFile(screen[screenIndex], character, strlen(character), &dword, NULL);
-}
 
 
 int main()
 {
-	char key = 0;
+	char map[H][W + 1] = {
+	"###############",
+	"#.............#",
+	"#.............#",
+	"#.............#",
+	"#.............#",
+	"#.............#",
+	"#.............#",
+	"###############",
+	};
 
-	CONSOLE_SCREEN_BUFFER_INFO console;
-
-	HANDLE hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
-
-	GetConsoleScreenBufferInfo(hStdout, &console);
-
-	int width = console.srWindow.Right - console.srWindow.Left - 2;
-	int height = console.srWindow.Bottom - console.srWindow.Top;
-
-	int x = 0;
-	int y = 0;
-
-	Initialize();
-
-	Render(x, y, "☆");
+	Player p = { 1, 1 };
 
 	while (1)
 	{
-		Flip();
+		gotoxy(0, 0);
 
-		Clear();
-
-		key = _getch();
-
-		if (key == -32 || key == 0)
-		{
-			key = _getch();
+		for (int i = 0; i < H; i++) {
+			for (int k = 0; k < W; k++) {
+				if (i == p.y && k == p.x)
+					printf("*");
+				else
+					printf("%c", map[i][k]);
+			}
+			printf("\n");
 		}
 
-		switch (key)
+		printf("WASD : move, Q quit\n");
+
+		int ch = _getch();
+		if (ch == 'Q' || ch == 'q') break;
+		
+		int ix = p.x, iy = p.y;
+		if (ch == 'w' || ch == 'W') iy--;
+
+		else if (ch == 's' || ch == 'S') iy++;
+
+		else if (ch == 'a' || ch == 'A') ix--;
+
+		else if (ch == 'd' || ch == 'D') ix++;
+
+		if (ix >= 0 && ix < W
+			&& iy >= 0 && iy < H && map[iy][ix] != '#')
 		{
-		case UP: if (y > 0) { y--; }
-			   break;
-
-		case LEFT: if (x > 0) { x -= 2; }
-				 break;
-
-		case RIGHT: if (width > x) { x += 2; }
-				  break;
-
-		case DOWN: if (height > y) { y++; }
-				 break;
-
-		default: printf("exception\n");
-			break;
+			p.x = ix;
+			p.y = iy;
 		}
 
-		Render(x, y, "☆");
 	}
-
 	return 0;
 }
 				

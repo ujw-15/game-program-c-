@@ -7,5 +7,6 @@
   <Project Path="../class2th (Time)/class2th (Time).vcxproj" Id="44b92b82-b561-44c9-bd22-722a52e48d93" />
   <Project Path="../class3th (file input &amp; output)/class3th (file input &amp; output).vcxproj" Id="bc4401ff-17d1-4e08-86ca-7061352b4603" />
   <Project Path="../class4th (color system)/class4th (color system).vcxproj" Id="99a72590-1305-4220-9153-3b551a604984" />
+  <Project Path="../class5th (double buffer)/class5th (double buffer).vcxproj" Id="575764f0-a8cc-46a5-b899-cef957d2d7c1" />
   <Project Path="project1.vcxproj" Id="2df22971-0049-4709-918c-13f66a55fbcb" />
 </Solution>
