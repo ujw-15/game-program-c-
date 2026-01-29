@@ -1,4 +1,5 @@
-﻿#define _CRT_SECURE_NO_WARNINGS
+﻿
+#define _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
 #include <stdio.h>
 #include <conio.h>
@@ -33,78 +34,132 @@
 #define DECK_BOX_W 25
 #define DECK_BOX_H 16
 
-#define CARD_UI_X (UI_W-26)
+#define CARD_UI_X (UI_W - 30)
 #define CARD_UI_Y 4
 
-#define TAG_ATTACK   (1 << 0)
-#define TAG_SETUP    (1 << 1)
-#define TAG_TRIGGER  (1 << 2)
-
 #define CODEX_COLS 6
-#define CODEX_ROWS 2
+#define CODEX_ROWS 3
+#define CODEX_SLOTS (CODEX_COLS * CODEX_ROWS) //18
 
 #define SLOT_W 22
-#define SLOT_H 12
+#define SLOT_H 8
 
 #define CODEX_X 6
 #define CODEX_Y 4
 
 #define SLOT_GAP_X 3
-#define SLOT_GAP_Y 3
+#define SLOT_GAP_Y 1
 
-int moveCountSinceLastBattle;
+#define FLOORS 3
+#define SKILLS_PER_FLOOR 18
+#define MAX_SKILLS (FLOORS * SKILLS_PER_FLOOR) // 54
 
-typedef enum {
-    NORTH = 0, EAST = 1, SOUTH = 2, WEST = 3
-} Dir;
+
+#define MAX_EQUIP 6
+#define ENERGY_MAX 3
+
+int moveCountSinceLastBattle = 0;
+
+// --------------------
+// 입력 대기(딜레이 대신)
+// --------------------
+void wait_any_key() {
+    _getch();
+}
+
+// --------------------
+// 방향/플레이어/적
+// --------------------
+typedef enum { NORTH = 0, EAST = 1, SOUTH = 2, WEST = 3 } Dir;
 
 typedef struct {
     int x, y;
-    int HP;
+    int HP, maxHP;
     char name[50];
     Dir dir;
 
     int level;
     int exp;
     int expToNext;
+
+    // 장착(전투 사용) 슬롯 6개
+    int equip[MAX_EQUIP]; // 스킬 id, 비어있으면 -1
+    int equipCount;
+
+    // 체크포인트
+    int cpX, cpY;
+    int hasCheckpoint;
+
+    // 현재 층(0..2)
+    int floor;
+
+    int poison;   // 독 스택
+    int burn;     // 화상 스택
+    int vuln;     // 취약 턴
+    int weak;     // 약화 턴
 } Player;
+
+typedef enum {
+    EFF_NONE = 0,
+    EFF_POISON,
+    EFF_BURN,
+    EFF_VULN,
+    EFF_WEAK
+} EffectType;
 
 typedef struct {
     char name[20];
     int hp;
     int maxHp;
     int atk;
-    int intent;   // 이번 턴 행동(0=공격,1=강공,2=수비 등)
+    int intent;
     int expReward;
+    int poison;   // 독 스택
+    int burn;     // 화상 스택
+    int vuln;     // 취약 턴
+    int weak;     // 약화 턴
 } Enemy;
 
-Enemy makeEnemy()
-{
-    Enemy e;
-    strcpy(e.name, "Slime");
-    e.maxHp = 40;
-    e.hp = e.maxHp;
-    e.atk = 8;
-    e.intent = 0;
-    e.expReward = 7;
-    return e;
-}
-
-// 카드 구조체 추가
+// --------------------
+// 스킬(도감 DB 60개)
+// --------------------
 typedef struct {
     int id;
-    char name[20];
-    int cost;
+    char name[32];
+    int cost;        // 비용(에너지)
     int dmg, block, heal;
-    int unlocked;        // 0 = 잠김, 1 = 해금
-    char dec[60];        // 설명
-} Card;
+    int unlocked;    // 0=잠김, 1=해금
+    char dec[80];
 
-#define MAX_CARDS 16
+    EffectType eff;   // 상태이상 종류
+    int effVal;       // 스택 or 턴 수
+} Skill;
+Skill codexSkills[MAX_SKILLS];
+int codexCount = MAX_SKILLS;
 
-Card codexCards[MAX_CARDS];
-int codexCount = 0;
+// 상태이상 처리
+int CalcPlayerDamage(int base, Enemy* e, Player* p)
+{
+    int dmg = base;
 
+    // 약화: 주는 피해 감소
+    if (p->weak > 0)
+        dmg = dmg * 75 / 100;
+
+    // 취약: 받는 피해 증가
+    if (e->vuln > 0)
+        dmg = dmg * 150 / 100;
+
+    // 독: 공격 시 추가 피해
+    if (e->poison > 0)
+        dmg += e->poison;
+
+    if (dmg < 0) dmg = 0;
+    return dmg;
+}
+// --------------------
+// 콘솔 유틸
+// --------------------
 char dirchar(Dir d) {
     switch (d) {
     case NORTH: return '^';
@@ -138,124 +193,6 @@ void setConsoleSize(int width, int height) {
     SetConsoleWindowInfo(h, TRUE, &windowSize);
 }
 
-void waitenter() {
-    int eh;
-    while (1) {
-        eh = _getch();
-        if (eh == 13) break;
-    }
-}
-
-void showStartScreen() {
-    system("cls");
-
-    printf("\n\n");
-    for (int i = 0; i < 120; i++) printf("=");
-    printf("\n\n");
-
-    printf("                                                  DUNGEON GAME\n\n\n");
-    for (int i = 0; i < 120; i++) printf("=");
-    printf("\n\n");
-
-    printf("                                            press enter key to start\n");
-    waitenter();
-}
-
-void showNarration(Player* p) {
-    system("cls");
-    printf("\n");
-    printf("====================================\n");
-    printf("              NARRATION             \n");
-    printf("====================================\n\n");
-
-    printf("[Enter] 다음\n\n");
-    waitenter();
-    printf("...눈을 뜨자, 낯선 공기가 폐를 찔렀다.\n\n");
-    waitenter();
-    printf("벽은 차갑고, 바닥은 젖어 있었다, 앞은 칠흙같은 어둠으로 번져있다.\n\n");
-    waitenter();
-    printf("어딘가에서, 아주 작은 숨소리가 들린다.\n\n");
-    waitenter();
-    printf("당신은 그 나약한 숨소리가 본인이라는 것을 인지했다.");
-    waitenter();
-
-    system("cls");
-    printf("\n");
-    printf("====================================\n");
-    printf("              NARRATION             \n");
-    printf("====================================\n\n");
-
-    printf("당신은 무언가를 잊고 있다.\n\n");
-    waitenter();
-    printf("이곳에 들어온 이유도, 돌아갈 길도.\n\n");
-    waitenter();
-    printf("하지만 한 가지는 확실하다.\n\n");
-    waitenter();
-    printf("여기서 나가야 한다는 것을.\n\n");
-    waitenter();
-
-    system("cls");
-    printf("\n");
-    printf("====================================\n");
-    printf("              NARRATION             \n");
-    printf("====================================\n\n");
-
-    printf("당신은 몸을 쑤셔오는 고통과 공포를 뒤엎고 일어셨다.\n\n");
-    waitenter();
-    printf("당신은 희미해져가는 머리속에서 자신의 이름을 생각한다.\n\n");
-    waitenter();
-    system("cls");
-    printf("내 이름은....\n\n");
-    printf("당신의 이름을 생각하시오: \n\n");
-
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF) {}
-
-    fgets((*p).name, sizeof((*p).name), stdin);
-    (*p).name[strcspn((*p).name, "\n")] = '\0';
-
-    if ((*p).name[0] == '\0') strcpy_s((*p).name, sizeof((*p).name), "방랑자");
-    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
-    printf("어지러운 머리속에선 이름만이 기억난다.\n");
-    waitenter();
-
-    system("cls");
-    printf("\n");
-    printf("====================================\n");
-    printf("              NARRATION             \n");
-    printf("====================================\n\n");
-
-    printf("%s은(는) 근처 상황을 살펴본다.\n\n", (*p).name);
-    waitenter();
-    printf("보란듯이 놓여져있는 낡은 검과 방패,,\n\n");
-    waitenter();
-    printf("%s은(는) 꺼림찍함을 뒤로하고 검과 방패를 장비한다,\n\n", (*p).name);
-    waitenter();
-    printf("%s은(는) 마음을 한차례 심호흡을 한 후 커다란 문을 열고 앞으로 나아간다.", (*p).name);
-    waitenter();
-}
-
-void sw() {
-    gotoxy(6, 33);
-    printf("        ");
-    for (int i = 0; i <= 130; i++) {
-        printf("-");
-    }
-
-    gotoxy(6, 34); printf("       /");
-    gotoxy(6, 35); printf("      /");
-    gotoxy(6, 36); printf("     / ");
-    gotoxy(6, 37); printf("    /");
-    gotoxy(6, 38); printf("   /");
-    gotoxy(6, 39); printf("  /");
-    gotoxy(6, 40); printf(" /");
-    gotoxy(6, 41); printf("/");
-    gotoxy(5, 42);
-    for (int i = 0; i <= 134; i++) {
-        printf("-");
-    }
-}
-
 void drawbox(int x, int y, int w, int h, const char* title) {
     gotoxy(x, y);
     putchar('+');
@@ -287,184 +224,116 @@ void clearBoxInner(int x, int y, int w, int h) {
     }
 }
 
+void ClearPendingInputSafe()
+{
+    while (_kbhit()) {
+        int c = _getch();
+        if (c == 224 || c == 0) { // 방향키 2바이트 처리
+            if (_kbhit()) _getch();
+        }
+    }
+}
+
+void ClearScreenNoFlicker()
+{
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    DWORD written;
+    COORD home = { 0,0 };
+
+    GetConsoleScreenBufferInfo(h, &csbi);
+    DWORD size = csbi.dwSize.X * csbi.dwSize.Y;
+
+    FillConsoleOutputCharacter(h, ' ', size, home, &written);
+    FillConsoleOutputAttribute(h, csbi.wAttributes, size, home, &written);
+    SetConsoleCursorPosition(h, home);
+}
+
+
 void drawUIFrame() {
     system("cls");
     drawbox(0, 0, UI_W, UI_H, "");
     drawbox(M_X, M_Y, M_W, M_H, "");
-    drawbox(MSG_X, MSG_Y, MSG_W, MSG_H, " MESSAGE ");
-    drawbox(STAT_X, STAT_Y, STAT_W, STAT_H, " STATUS ");
-    drawbox(DECK_BOX_X, DECK_BOX_Y, DECK_BOX_W, DECK_BOX_H, " DECK ");
+    drawbox(MSG_X, MSG_Y, MSG_W, MSG_H, " 메세지 ");
+    drawbox(STAT_X, STAT_Y, STAT_W, STAT_H, " 상태 ");
+    drawbox(DECK_BOX_X, DECK_BOX_Y, DECK_BOX_W, DECK_BOX_H, " 스킬북 ");
+
+    clearBoxInner(M_X, M_Y, M_W, M_H);
+    clearBoxInner(MSG_X, MSG_Y, MSG_W, MSG_H);
+    clearBoxInner(STAT_X, STAT_Y, STAT_W, STAT_H);
+    clearBoxInner(DECK_BOX_X, DECK_BOX_Y, DECK_BOX_W, DECK_BOX_H);
 }
-void ShowCardDetail(Card c)
-{
-    system("cls");
-    drawbox(20, 5, 120, 30, " CARD DETAIL ");
 
-    if (!c.unlocked) {
-        gotoxy(24, 10); printf("LOCKED CARD");
-        gotoxy(24, 12); printf("unlock needed!");
-        gotoxy(24, 28); printf("ENTER to return");
-        while (_getch() != 13);
-        return;
-    }
+void sw() {
+    gotoxy(6, 33);
+    printf("        ");
+    for (int i = 0; i <= 130; i++) printf("-");
 
-    gotoxy(24, 9);  printf("NAME : %s", c.name);
-    gotoxy(24, 11); printf("COST : %d", c.cost);
-    gotoxy(24, 13); printf("DMG  : %d", c.dmg);
-    gotoxy(24, 14); printf("BLOCK: %d", c.block);
-    gotoxy(24, 15); printf("HEAL : %d", c.heal);
-    gotoxy(24, 18); printf("DESC : %s", c.dec);
-
-    gotoxy(24, 28); printf("ENTER to return");
-    while (_getch() != 13);
+    gotoxy(6, 34); printf("       /");
+    gotoxy(6, 35); printf("      /");
+    gotoxy(6, 36); printf("     / ");
+    gotoxy(6, 37); printf("    /");
+    gotoxy(6, 38); printf("   /");
+    gotoxy(6, 39); printf("  /");
+    gotoxy(6, 40); printf(" /");
+    gotoxy(6, 41); printf("/");
+    gotoxy(5, 42);
+    for (int i = 0; i <= 134; i++) printf("-");
 }
-void DrawCodexSlot(int x, int y, int w, int h, const Card* c, int hasCard, int selected)
-{
-    // 테두리
-    gotoxy(x, y); putchar('+');
-    for (int i = 0; i < w - 2; i++) putchar('-');
-    putchar('+');
 
-    for (int r = 1; r < h - 1; r++) {
-        gotoxy(x, y + r); putchar('|');
-        gotoxy(x + w - 1, y + r); putchar('|');
-    }
-
-    gotoxy(x, y + h - 1); putchar('+');
-    for (int i = 0; i < w - 2; i++) putchar('-');
-    putchar('+');
-
-    // 선택 표시(좌우 화살표 느낌)
-    if (selected) {
-        gotoxy(x - 2, y + h / 2); printf(">");
-        gotoxy(x + w + 1, y + h / 2); printf("<");
-    }
-
-    // 내용
-    if (!hasCard) {
-        gotoxy(x + 2, y + 2);
-        printf("(EMPTY)");
-        return;
-    }
-
-    if (c->unlocked) {
-        gotoxy(x + 2, y + 2);  printf("%-18s", c->name);
-        gotoxy(x + 2, y + 4);  printf("COST: %d", c->cost);
-        gotoxy(x + 2, y + 6);  printf("D:%d B:%d", c->dmg, c->block);
-        gotoxy(x + 2, y + 7);  printf("H:%d", c->heal);
-        gotoxy(x + 2, y + 9);  printf("%-18.18s", c->dec);
-    }
-    else {
-        gotoxy(x + 2, y + 2);  printf("???? (LOCKED)");
-        gotoxy(x + 2, y + 5);  printf("unlock!");
-    }
+void renderMessageLine(int line, const char* msg) {
+    int y = MSG_Y + 2 + line;
+    gotoxy(MSG_X + 2, y);
+    printf("%-66s", msg ? msg : "");
 }
-void OpenCodexScene(Card* cards, int count)
+
+void CodexNotice(const char* msg)
 {
-    int slotsPerPage = CODEX_COLS * CODEX_ROWS;
-    int page = 0;
-    int selected = 0;
+    int x = CODEX_X;
+    int y = CODEX_Y + CODEX_ROWS * SLOT_H + (CODEX_ROWS - 1) * SLOT_GAP_Y + 1;
 
-    while (1) {
-        system("cls");
-        drawbox(0, 0, UI_W, UI_H, "");
-        drawbox(2, 1, UI_W - 4, UI_H - 2, " CODEX ");
+    if (y > UI_H - 3) y = UI_H - 3;
 
-        // 페이지 안내
-        gotoxy(6, 2);
-        printf("E/ESC: 닫기 | ENTER: 상세 | 방향키: 이동 | A/D: 페이지  (page %d)", page + 1);
-
-        int startIndex = page * slotsPerPage;
-
-        // 그리드 출력
-        for (int r = 0; r < CODEX_ROWS; r++) {
-            for (int c = 0; c < CODEX_COLS; c++) {
-                int slotIdx = r * CODEX_COLS + c;
-                int cardIdx = startIndex + slotIdx;
-
-                int x = CODEX_X + c * (SLOT_W + SLOT_GAP_X);
-                int y = CODEX_Y + r * (SLOT_H + SLOT_GAP_Y);
-
-                int hasCard = (cardIdx < count);
-                int isSel = (slotIdx == selected);
-
-                if (hasCard) DrawCodexSlot(x, y, SLOT_W, SLOT_H, &cards[cardIdx], 1, isSel);
-                else        DrawCodexSlot(x, y, SLOT_W, SLOT_H, NULL, 0, isSel);
-            }
-        }
-
-        int ch = _getch();
-
-        // 닫기
-        if (ch == 'e' || ch == 'E' || ch == 27) break;
-
-        // 페이지 이동
-        if (ch == 'a' || ch == 'A') {
-            if (page > 0) page--;
-            selected = 0;
-            continue;
-        }
-        if (ch == 'd' || ch == 'D') {
-            int maxPage = (count - 1) / slotsPerPage;
-            if (page < maxPage) page++;
-            selected = 0;
-            continue;
-        }
-
-        // 상세보기
-        if (ch == 13) {
-            int idx = page * slotsPerPage + selected;
-            if (idx < count) ShowCardDetail(cards[idx]);
-            continue;
-        }
-
-        // 방향키 이동(그림판처럼 칸 이동)
-        if (ch == 224 || ch == 0) {
-            ch = _getch();
-            int row = selected / CODEX_COLS;
-            int col = selected % CODEX_COLS;
-
-            if (ch == 72 && row > 0) row--;                 // ↑
-            else if (ch == 80 && row < CODEX_ROWS - 1) row++; // ↓
-            else if (ch == 75 && col > 0) col--;             // ←
-            else if (ch == 77 && col < CODEX_COLS - 1) col++; // →
-
-            selected = row * CODEX_COLS + col;
-        }
-    }
+    gotoxy(x, y);
+    printf("%-150s", "");
+    gotoxy(x, y);
+    printf("%-150s", msg ? msg : "");
 }
-void InitCodex()
-{
-    codexCount = 0;
 
-    codexCards[codexCount++] = (Card){ 0,"Attack",1,10,0,0,1,"기본 공격" };
-    codexCards[codexCount++] = (Card){ 1,"Defend",1,0,5,0,1,"방어" };
-    codexCards[codexCount++] = (Card){ 2,"Heal",2,0,0,8,1,"회복" };
 
-    codexCards[codexCount++] = (Card){ 3,"Poison",2,12,0,0,0,"독 카드(잠김)" };
+void renderMessage(const char* msg) {
+    renderMessageLine(0, msg);
 }
 
 void playerstate(Player* p) {
     gotoxy(STAT_X + 2, STAT_Y + 2);
-    printf("%s : ", p->name);
-    gotoxy(STAT_X + 12, STAT_Y + 2);
-    printf("LEVEL %d", p->level);
-    gotoxy(STAT_X + 2, STAT_Y + 4);
-    printf("HP %d", p->HP);
+    printf("%-22s", "");
+    gotoxy(STAT_X + 2, STAT_Y + 2);
+    printf("%s", p->name);
+
+    gotoxy(STAT_X + 2, STAT_Y + 3);
+    printf("레벨 %d  경험치 %d/%d   ", p->level, p->exp, p->expToNext);
+
+    gotoxy(STAT_X + 2, STAT_Y + 5);
+    printf("체력 %d/%d          ", p->HP, p->maxHP);
+
+    gotoxy(STAT_X + 2, STAT_Y + 7);
+    printf("층 %d                ", p->floor + 1);
+
+    gotoxy(STAT_X + 2, STAT_Y + 8);
+    if (p->hasCheckpoint) printf("체크포인트 O         ");
+    else                 printf("체크포인트 X         ");
 }
 
-void renderDeckObject(int deckCount) {
+void renderSkillBookObject() {
     int x = DECK_BOX_X + 3;
     int y = DECK_BOX_Y + 2;
-
-    gotoxy(DECK_BOX_X + 2, DECK_BOX_Y + 1);
-    printf("       COUNT: %d", deckCount);
 
     gotoxy(x, y + 0);  printf("    ______________");
     gotoxy(x, y + 1);  printf("   /___________/||");
     gotoxy(x, y + 2);  printf("  +------------+||");
     gotoxy(x, y + 3);  printf("  |            |||");
-    gotoxy(x, y + 4);  printf("  |  CARD DECK |||");
+    gotoxy(x, y + 4);  printf("  |  스 킬  북 |||");
     gotoxy(x, y + 5);  printf("  |            |||");
     gotoxy(x, y + 6);  printf("  |            |||");
     gotoxy(x, y + 7);  printf("  |            |||");
@@ -473,6 +342,890 @@ void renderDeckObject(int deckCount) {
     gotoxy(x, y + 10); printf("  +------------+/");
 }
 
+// --------------------
+// 장착(6개) 유틸
+// --------------------
+int IsEquipped(Player* p, int skillId) {
+    for (int i = 0; i < MAX_EQUIP; i++) {
+        if (p->equip[i] == skillId) return 1;
+    }
+    return 0;
+}
+
+int FirstEmptyEquipSlot(Player* p) {
+    for (int i = 0; i < MAX_EQUIP; i++) {
+        if (p->equip[i] == -1) return i;
+    }
+    return -1;
+}
+
+void RecountEquip(Player* p) {
+    int c = 0;
+    for (int i = 0; i < MAX_EQUIP; i++) if (p->equip[i] != -1) c++;
+    p->equipCount = c;
+}
+
+void UnequipSkill(Player* p, int skillId) {
+    for (int i = 0; i < MAX_EQUIP; i++) {
+        if (p->equip[i] == skillId) {
+            p->equip[i] = -1;
+            break;
+        }
+    }
+    RecountEquip(p);
+}
+
+void EquipSkill(Player* p, int skillId) {
+    if (IsEquipped(p, skillId)) return;
+
+    int slot = FirstEmptyEquipSlot(p);
+    if (slot != -1) {
+        p->equip[slot] = skillId;
+        RecountEquip(p);
+        return;
+    }
+
+    // 꽉 차 있으면: 교체 선택 UI (1~6)
+    gotoxy(2, 26);
+    renderMessage("슬롯이 가득 찼다. 교체할 슬롯(1~6) 입력, ESC 취소");
+    int ch = _getch();
+    if (ch == 27) return;
+
+    if (ch >= '1' && ch <= '6') {
+        int idx = ch - '1';
+        p->equip[idx] = skillId;
+        RecountEquip(p);
+    }
+}
+
+void DrawEquippedList(Player* p, int x, int y) {
+    gotoxy(x, y);
+    printf("장착(전투 사용) 스킬 6개:");
+    for (int i = 0; i < MAX_EQUIP; i++) {
+        gotoxy(x, y + 1 + i);
+        if (p->equip[i] == -1) {
+            printf("%d) (비어있음)                 ", i + 1);
+        }
+        else {
+            Skill* s = &codexSkills[p->equip[i]];
+            printf("%d) %-18s(비용:%d)     ", i + 1, s->name, s->cost);
+        }
+    }
+    gotoxy(x, y + 8);
+    printf("아무 키: 닫기");
+}
+
+// --------------------
+// 도감
+// --------------------
+void ShowSkillDetail(Skill s) {
+    ClearScreenNoFlicker();
+    drawbox(20, 5, 120, 30, " 스킬 상세 ");
+
+    if (!s.unlocked) {
+        gotoxy(24, 10); printf("잠김 상태");
+        gotoxy(24, 10); printf("해금이 필요합니다.");
+        gotoxy(24, 28); printf("아무 키: 돌아가기");
+        wait_any_key();
+        return;
+    }
+
+    gotoxy(24, 9);  printf("이름 : %s", s.name);
+    gotoxy(24, 11); printf("비용 : %d", s.cost);
+    gotoxy(24, 13); printf("피해 : %d", s.dmg);
+    gotoxy(24, 14); printf("방어 : %d", s.block);
+    gotoxy(24, 15); printf("회복 : %d", s.heal);
+    gotoxy(24, 18); printf("설명 : %s", s.dec);
+
+    gotoxy(24, 28); printf("아무 키: 돌아가기");
+    wait_any_key();
+}
+
+void DrawCodexSlot(int x, int y, int w, int h,
+    const Skill* s, int hasSkill, int selected, int equipped)
+{
+    // 테두리
+    gotoxy(x, y); putchar('+');
+    for (int i = 0; i < w - 2; i++) putchar('-');
+    putchar('+');
+
+    for (int r = 1; r < h - 1; r++) {
+        gotoxy(x, y + r); putchar('|');
+        gotoxy(x + 1, y + r);
+        for (int i = 0; i < w - 2; i++) putchar(' ');
+        gotoxy(x + w - 1, y + r); putchar('|');
+    }
+
+    gotoxy(x, y + h - 1); putchar('+');
+    for (int i = 0; i < w - 2; i++) putchar('-');
+    putchar('+');
+
+    // ===== 선택표시: 반드시 "지우기"까지 처리해야 잔상 안 남음 =====
+    gotoxy(x - 2, y + h / 2); printf("%c", selected ? '>' : ' ');
+    gotoxy(x + w + 1, y + h / 2); printf("%c", selected ? '<' : ' ');
+
+    // 내용
+    if (!hasSkill || !s) {
+        gotoxy(x + 2, y + 2);
+        printf("%-18s", "(EMPTY)");
+        gotoxy(x + 2, y + 6);
+        printf("%-6s", " "); // 장착표시 자리 지우기
+        return;
+    }
+
+    if (!s->unlocked) {
+        gotoxy(x + 2, y + 2); printf("%-18s", "???? (잠김)");
+        gotoxy(x + 2, y + 4); printf("%-18s", "해금 필요");
+        gotoxy(x + 2, y + 6); printf("%-6s", " "); // 장착표시 자리 지우기
+        return;
+    }
+
+    gotoxy(x + 2, y + 2);  printf("%-18.18s", s->name);
+    gotoxy(x + 2, y + 3);  printf("비용:%-2d          ", s->cost);
+    gotoxy(x + 2, y + 4);  printf("피:%-3d 방:%-3d      ", s->dmg, s->block);
+    gotoxy(x + 2, y + 5);  printf("회:%-3d             ", s->heal);
+
+    // ===== 장착표시: 고정폭으로 출력해서 잔상 제거 =====
+    gotoxy(x + 2, y + 6);
+    printf("%-6s", equipped ? "[장착]" : " ");
+}
+
+static void RedrawOneCodexSlot(Player* p, int floorPage, int slotIdx, int selectedSlot)
+{
+    int startIndex = floorPage * SKILLS_PER_FLOOR;
+    int skillIdx = startIndex + slotIdx;
+
+    int x = CODEX_X + (slotIdx % CODEX_COLS) * (SLOT_W + SLOT_GAP_X);
+    int y = CODEX_Y + (slotIdx / CODEX_COLS) * (SLOT_H + SLOT_GAP_Y);
+
+    int hasSkill = (skillIdx >= 0 && skillIdx < MAX_SKILLS);
+    int equipped = 0;
+
+    if (hasSkill && codexSkills[skillIdx].unlocked)
+        equipped = IsEquipped(p, codexSkills[skillIdx].id);
+
+    if (hasSkill)
+        DrawCodexSlot(x, y, SLOT_W, SLOT_H, &codexSkills[skillIdx], 1, (slotIdx == selectedSlot), equipped);
+    else
+        DrawCodexSlot(x, y, SLOT_W, SLOT_H, NULL, 0, (slotIdx == selectedSlot), 0);
+}
+
+static void RedrawCodexPage(Player* p, int floorPage, int selected)
+{
+    // 도감 내부만 정리 (전체 cls 금지)
+    clearBoxInner(2, 1, UI_W - 4, UI_H - 2);
+
+    gotoxy(6, 2);
+    printf("E/ESC: 닫기 | ENTER: 상세 | R: 장착/해제 | T: 장착목록 | 방향키: 이동 | A/D: 층 페이지   (층 %d)      ",
+        floorPage + 1);
+
+    for (int i = 0; i < CODEX_SLOTS; i++) {
+        RedrawOneCodexSlot(p, floorPage, i, selected);
+    }
+
+    // 공지줄도 한번 비워두기(잔상 방지)
+    CodexNotice(" ");
+}
+
+
+void OpenCodexScene(Player* p)
+{
+    int floorPage = p->floor;
+    int selected = 0;
+
+    // 처음 들어올 때만 화면 큰 틀 1번
+    // system("cls") 대신 drawbox + 내부 클리어로 충분
+    drawbox(0, 0, UI_W, UI_H, "");
+    drawbox(2, 1, UI_W - 4, UI_H - 2, " 도감 ");
+
+    RedrawCodexPage(p, floorPage, selected);
+
+    while (1) {
+        int ch = _getch();
+
+        // 특수키(방향키) 처리
+        if (ch == 224 || ch == 0) {
+            int k = _getch();
+            int prev = selected;
+
+            int row = selected / CODEX_COLS;
+            int col = selected % CODEX_COLS;
+
+            if (k == 72 && row > 0) row--;
+            else if (k == 80 && row < CODEX_ROWS - 1) row++;
+            else if (k == 75 && col > 0) col--;
+            else if (k == 77 && col < CODEX_COLS - 1) col++;
+
+            selected = row * CODEX_COLS + col;
+
+            // 선택 바뀐 경우에만 슬롯 2개 갱신
+            if (selected != prev) {
+                RedrawOneCodexSlot(p, floorPage, prev, selected);
+                RedrawOneCodexSlot(p, floorPage, selected, selected);
+                CodexNotice(" "); // 공지 잔상 방지
+            }
+            continue;
+        }
+
+        // 닫기
+        if (ch == 27 || ch == 'e' || ch == 'E') {
+            ClearPendingInputSafe(); // 남은 입력 찌꺼기 제거
+            return;
+        }
+
+        // 층 페이지 변경 (이건 페이지 전체만 다시 그리면 됨)
+        if (ch == 'a' || ch == 'A') {
+            if (floorPage > 0) floorPage--;
+            selected = 0;
+            RedrawCodexPage(p, floorPage, selected);
+            continue;
+        }
+        if (ch == 'd' || ch == 'D') {
+            if (floorPage < FLOORS - 1) floorPage++;
+            selected = 0;
+            RedrawCodexPage(p, floorPage, selected);
+            continue;
+        }
+
+        // 장착목록
+        if (ch == 't' || ch == 'T') {
+            system("cls");
+            drawbox(10, 5, 140, 30, " 장착 목록 ");
+            DrawEquippedList(p, 14, 8);
+            wait_any_key();
+
+            // 돌아오면 도감 화면을 "다시" 그려줘야 키가 안 먹는 느낌이 없어짐
+            drawbox(0, 0, UI_W, UI_H, "");
+            drawbox(2, 1, UI_W - 4, UI_H - 2, " 도감 ");
+            RedrawCodexPage(p, floorPage, selected);
+            continue;
+        }
+
+        // 상세
+        if (ch == 13) {
+            int idx = floorPage * SKILLS_PER_FLOOR + selected;
+            if (idx >= 0 && idx < MAX_SKILLS)
+                ShowSkillDetail(codexSkills[idx]);
+
+            // 상세창 갔다오면 도감 화면 복구
+            drawbox(0, 0, UI_W, UI_H, "");
+            drawbox(2, 1, UI_W - 4, UI_H - 2, " 도감 ");
+            RedrawCodexPage(p, floorPage, selected);
+            continue;
+        }
+
+        // 장착/해제
+        if (ch == 'r' || ch == 'R') {
+            int idx = floorPage * SKILLS_PER_FLOOR + selected;
+            if (idx >= 0 && idx < MAX_SKILLS) {
+                Skill* s = &codexSkills[idx];
+
+                if (!s->unlocked) {
+                    CodexNotice("잠김 스킬은 장착할 수 없다. 아무 키.");
+                    wait_any_key();
+                }
+                else {
+                    if (IsEquipped(p, s->id)) {
+                        UnequipSkill(p, s->id);
+                        CodexNotice("장착 해제됨. 아무 키.");
+                    }
+                    else {
+                        EquipSkill(p, s->id);
+                        CodexNotice("장착(또는 교체) 완료. 아무 키.");
+                    }
+                    wait_any_key();
+                }
+
+                // 장착 변경 반영: 현재 슬롯만 다시 그리면 됨
+                RedrawOneCodexSlot(p, floorPage, selected, selected);
+                // 그리고 공지줄 정리
+                CodexNotice(" ");
+            }
+            continue;
+        }
+    }
+}
+
+
+
+// --------------------
+// 스킬 DB 54개 초기화
+//  - 층1: 0~17 (Attack/Defend/Heal 기본 해금 포함)
+//  - 층2: 18~35
+//  - 층3: 36~54
+// --------------------
+
+void SetSkill(
+    int idx,
+    const char* name, int cost,
+    int dmg, int block, int heal,
+    int unlocked,
+    const char* dec,
+    EffectType eff, int effVal
+) {
+    codexSkills[idx].id = idx;
+    strcpy_s(codexSkills[idx].name, sizeof(codexSkills[idx].name), name);
+    strcpy_s(codexSkills[idx].dec, sizeof(codexSkills[idx].dec), dec);
+
+    codexSkills[idx].cost = cost;
+    codexSkills[idx].dmg = dmg;
+    codexSkills[idx].block = block;
+    codexSkills[idx].heal = heal;
+    codexSkills[idx].unlocked = unlocked;
+
+    codexSkills[idx].eff = eff;
+    codexSkills[idx].effVal = effVal;
+}
+
+void ApplyTurnEnd_Player(Player* p)
+{
+    // 화상
+    if (p->burn > 0) {
+        p->HP -= p->burn;
+        if (p->HP < 0) p->HP = 0;
+        p->burn--;
+    }
+
+    if (p->vuln > 0) p->vuln--;
+    if (p->weak > 0) p->weak--;
+}
+
+void ApplyTurnEnd_Enemy(Enemy* e)
+{
+    if (e->burn > 0) {
+        e->hp -= e->burn;
+        if (e->hp < 0) e->hp = 0;
+        e->burn--;
+    }
+
+    if (e->vuln > 0) e->vuln--;
+    if (e->weak > 0) e->weak--;
+}
+
+
+void InitCodex()
+{
+    // 기본값 초기화
+    for (int i = 0; i < MAX_SKILLS; i++) {
+        SetSkill(i, "미정", 99, 0, 0, 0, 0, "아직 없음", EFF_NONE, 0);
+    }
+
+    // ====== 층1 스킬 18개 (0~17) ======
+    // 시작 해금 3개
+    SetSkill(0, "공격", 1, 100, 0, 0, 1, "기본 공격", EFF_NONE, 0);
+    SetSkill(1, "방어", 1, 0, 6, 0, 1, "기본 방어", EFF_NONE, 0);
+    SetSkill(2, "회복", 2, 0, 0, 10, 1, "기본 회복", EFF_NONE, 0);
+
+    // 공격(개성)
+    SetSkill(3, "속공", 0, 6, 0, 0, 0, "0비용 빠른 공격", EFF_NONE, 0);
+    SetSkill(4, "찌르기", 1, 8, 0, 0, 0, "독 상태 적에게 추가 피해", EFF_NONE, 0); // 조건부는 코드로 처리
+    SetSkill(5, "강타", 2, 18, 0, 0, 0, "취약 적에게 추가 피해", EFF_NONE, 0);     // 조건부는 코드로 처리
+
+    // 독(공격 트리거형 독)
+    SetSkill(6, "독 바르기", 1, 4, 0, 0, 0, "독 3 부여", EFF_POISON, 3);
+    SetSkill(7, "침식", 1, 0, 0, 0, 0, "독 5 부여", EFF_POISON, 5);
+    SetSkill(8, "신경 독소", 2, 6, 0, 0, 0, "독 4 부여", EFF_POISON, 4);
+
+    // 화상(턴 피해형)
+    SetSkill(9, "화염 참격", 2, 14, 0, 0, 0, "화상 3 부여", EFF_BURN, 3);
+    SetSkill(10, "불씨", 1, 4, 0, 0, 0, "화상 3 부여", EFF_BURN, 3);
+    SetSkill(11, "잔불", 0, 0, 0, 0, 0, "0비용 화상 1", EFF_BURN, 1);
+
+    // 디버프(취약/약화)
+    SetSkill(12, "약점 노출", 1, 0, 0, 0, 0, "취약 2턴", EFF_VULN, 2);
+    SetSkill(13, "기력 붕괴", 1, 6, 0, 0, 0, "약화 2턴", EFF_WEAK, 2);
+    SetSkill(14, "압박", 2, 0, 0, 0, 0, "취약 3턴", EFF_VULN, 3);
+
+    // 생존
+    SetSkill(15, "집중", 2, 0, 20, 0, 0, "안정적인 방어", EFF_NONE, 0);
+    SetSkill(16, "철벽", 2, 10, 16, 0, 0, "최선의 방어는 공격", EFF_NONE, 0);
+    SetSkill(17, "흡혈", 2, 10, 0, 15, 0, "공격 후 회복", EFF_NONE, 0);
+
+    // 층2/층3은 나중에 18~53 채우면 됨
+}
+
+// --------------------
+// 해금(상자/상인/처치) 유틸
+// --------------------
+int RandomLockedSkillOnFloor(int floor) {
+    int start = floor * SKILLS_PER_FLOOR;
+    int tries = 200;
+    while (tries--) {
+        int idx = start + (rand() % SKILLS_PER_FLOOR);
+        if (idx >= 0 && idx < MAX_SKILLS && codexSkills[idx].unlocked == 0) return idx;
+    }
+    // 다 열려 있으면 -1
+    return -1;
+}
+
+void UnlockOneSkill(Player* p, int floor) {
+    int idx = RandomLockedSkillOnFloor(floor);
+    if (idx == -1) {
+        renderMessage("이 층의 스킬은 이미 전부 해금됨. 아무 키.");
+        wait_any_key();
+        return;
+    }
+
+    codexSkills[idx].unlocked = 1;
+
+    char buf[160];
+    sprintf_s(buf, sizeof(buf), "스킬 해금: %s  (도감에 기록됨)  [E]=도감 열기 / 아무키=계속", codexSkills[idx].name);
+    renderMessage(buf);
+
+    int ch = _getch();
+
+}
+
+
+// --------------------
+// 적 생성 (층당 5종)
+// --------------------
+Enemy makeEnemyForFloor(int floor) {
+    Enemy e;
+    memset(&e, 0, sizeof(e));
+
+    int type = rand() % 5;
+
+    if (floor == 0) {
+        const char* names[5] = { "슬라임", "박쥐", "쥐", "해골", "거미" };
+        strcpy_s(e.name, sizeof(e.name), names[type]);
+        e.maxHp = 35 + type * 5;
+        e.atk = 6 + type;
+        e.expReward = 6 + type;
+    }
+    else if (floor == 1) {
+        const char* names[5] = { "강슬라임", "늑대", "망령", "전사해골", "독거미" };
+        strcpy_s(e.name, sizeof(e.name), names[type]);
+        e.maxHp = 55 + type * 7;
+        e.atk = 9 + type * 2;
+        e.expReward = 10 + type;
+    }
+    else {
+        const char* names[5] = { "흑기사", "거대박쥐", "저주망령", "암흑전사", "독왕거미" };
+        strcpy_s(e.name, sizeof(e.name), names[type]);
+        e.maxHp = 80 + type * 10;
+        e.atk = 13 + type * 3;
+        e.expReward = 16 + type * 2;
+    }
+
+    e.hp = e.maxHp;
+    e.intent = 0;
+    return e;
+}
+
+// --------------------
+// 경험치/레벨업
+// --------------------
+void gainExp(Player* p, int amount) {
+    p->exp += amount;
+
+    while (p->exp >= p->expToNext) {
+        p->exp -= p->expToNext;
+        p->level++;
+
+        // 성장
+        p->maxHP += 10;         // 성장만
+        if (p->HP > p->maxHP) p->HP = p->maxHP;
+        p->expToNext += 5;
+
+
+        renderMessage("레벨업! 최대 체력 +10. 아무 키.");
+        wait_any_key();
+    }
+}
+
+// --------------------
+// 전투 UI (오른쪽에 장착 6개 스킬 리스트)
+// --------------------
+void drawSkillCardMini(int x, int y, const Skill* s, int selected) {
+    gotoxy(x, y);     printf("+----------------------+");
+    gotoxy(x, y + 1); printf("|                      |");
+    gotoxy(x, y + 2); printf("|                      |");
+    gotoxy(x, y + 3); printf("|                      |");
+    gotoxy(x, y + 4); printf("+----------------------+");
+
+    if (selected) {
+        gotoxy(x - 2, y + 2);  printf(">>");
+        gotoxy(x + 24, y + 2); printf("<<");
+    }
+
+    if (!s) {
+        gotoxy(x + 2, y + 1); printf("(비어있음)");
+        return;
+    }
+
+    gotoxy(x + 2, y + 1);
+    printf("%-16s", s->name);
+    gotoxy(x + 19, y + 1);
+    printf("비용:%d", s->cost);
+
+    gotoxy(x + 2, y + 2);
+    printf("피:%2d 방:%2d 회:%2d", s->dmg, s->block, s->heal);
+
+    gotoxy(x + 2, y + 3);
+    printf("%-20.20s", s->dec);
+}
+
+void drawEquippedSkillsUI(Player* p, int selected) {
+    int baseX = CARD_UI_X;
+    int baseY = CARD_UI_Y;
+    int gapY = 5;
+
+    for (int i = 0; i < MAX_EQUIP; i++) {
+        Skill* s = NULL;
+        if (p->equip[i] != -1) s = &codexSkills[p->equip[i]];
+        drawSkillCardMini(baseX, baseY + i * gapY, s, (i == selected));
+    }
+}
+
+// --------------------
+// 전투 로직 (6개 스킬 중 선택 + 에너지/가드)
+// --------------------
+int applySkill(Player* p, Enemy* e, int* block, int* energy, Skill* s)
+{
+    if (!s) {
+        renderMessage("비어있는 슬롯이다. 아무 키.");
+
+        return 0;
+    }
+
+    if (*energy < s->cost) {
+        renderMessage("에너지가 부족하다. 아무 키.");
+
+        return 0;
+    }
+
+    //  에너지 먼저 차감
+    *energy -= s->cost;
+
+    //  공격(딱 한 번만)
+    if (s->dmg > 0) {
+        int base = s->dmg;
+
+        // 찌르기(4): 독 걸려있으면 +4
+        if (s->id == 4 && e->poison > 0) base += 4;
+
+        // 강타(5): 취약 걸려있으면 +10
+        if (s->id == 5 && e->vuln > 0) base += 10;
+
+        int real = CalcPlayerDamage(base, e, p);
+        e->hp -= real;
+        if (e->hp < 0) e->hp = 0;
+    }
+
+    // 방어/회복
+    if (s->block > 0) {
+        *block += s->block;
+    }
+    if (s->heal > 0) {
+        p->HP += s->heal;
+        if (p->HP > p->maxHP) p->HP = p->maxHP;
+    }
+
+    // 상태이상 부여
+    switch (s->eff) {
+    case EFF_POISON: e->poison += s->effVal; break;
+    case EFF_BURN:   e->burn += s->effVal; break;
+    case EFF_VULN:   e->vuln += s->effVal; break;
+    case EFF_WEAK:   e->weak += s->effVal; break;
+    default: break;
+    }
+
+    char buf[160];
+    sprintf_s(buf, sizeof(buf),
+        "사용: %s | 남은에너지:%d | 적체력:%d/%d  (아무 키)",
+        s->name, *energy, e->hp, e->maxHp);
+
+    renderMessage(buf);
+    wait_any_key();
+    return 1;
+}
+
+
+void enemyTurn(Player* p, Enemy* e, int* block) {
+    // 의도 결정
+    e->intent = rand() % 3; // 0 공격, 1 강공, 2 방어
+
+    if (e->intent == 2) {
+        // 적 방어(간단히 atk 상승 같은 걸로 바꿔도 됨)
+        renderMessage("적이 수비 자세를 취한다. 아무 키.");
+        wait_any_key();
+        // (아직 실제 방어막 구현 안 함, enemyBlock 넣으면 됨)
+        return;
+    }
+
+    int dmg = e->atk + (e->intent == 1 ? 5 : 0);
+
+    int taken = dmg;
+    if (*block > 0) {
+        int used = (*block >= taken) ? taken : *block;
+        *block -= used;
+        taken -= used;
+    }
+
+    if (taken > 0) {
+        p->HP -= taken;
+        if (p->HP < 0) p->HP = 0;
+    }
+
+    char buf[128];
+    if (e->intent == 1) sprintf_s(buf, sizeof(buf), "%s의 강공! 피해:%d  (아무 키)", e->name, dmg);
+    else               sprintf_s(buf, sizeof(buf), "%s의 공격! 피해:%d  (아무 키)", e->name, dmg);
+
+    renderMessage(buf);
+    wait_any_key();
+
+    // 턴 종료 시 방어막 사라짐(슬더스식) - 네가 원하면 유지형으로 바꿔도 됨
+    *block = 0;
+}
+
+// 전투에서 죽으면 체크포인트로 워프 + 체력 회복
+void RespawnAtCheckpoint(Player* p) {
+    if (p->hasCheckpoint) {
+        p->x = p->cpX;
+        p->y = p->cpY;
+    }
+    else {
+        // 체크포인트 없으면 시작점으로(1,1)
+        p->x = 1;
+        p->y = 1;
+    }
+    p->HP = p->maxHP;
+}
+
+int battleLoop(Player* p) {
+    Enemy enemy = makeEnemyForFloor(p->floor);
+
+    int energy = ENERGY_MAX;
+    int block = 0;
+    int selected = 0;
+    int zeroUsedThisTurn = 0;
+
+    while (1) {
+        // 승패 체크
+        if (enemy.hp <= 0) {
+            renderMessage("승리! 경험치를 획득했다. 아무 키.");
+            wait_any_key();
+            gainExp(p, enemy.expReward);
+
+            // 적 처치 보상(확률로 해금 1개)
+            if ((rand() % 100) < 35) {
+                renderMessage("보상 발견! 스킬 1개 해금. 아무 키.");
+                wait_any_key();
+                UnlockOneSkill(p, p->floor);
+            }
+            return 1; // 승리
+        }
+
+        if (p->HP <= 0) {
+            renderMessage("패배... 체크포인트로 이동한다. 아무 키.");
+            wait_any_key();
+            RespawnAtCheckpoint(p);
+            return 0; // 패배
+        }
+
+        // 화면
+        drawUIFrame();
+        sw();
+        playerstate(p);
+        renderSkillBookObject();
+
+        clearBoxInner(M_X, M_Y, M_W, M_H);
+        gotoxy(M_X + 2, M_Y + 2);
+        printf("<< 전투 >>");
+
+        gotoxy(M_X + 2, M_Y + 4);
+        printf("적: %-10s  체력:%3d/%3d", enemy.name, enemy.hp, enemy.maxHp);
+
+        gotoxy(M_X + 2, M_Y + 8);
+        printf("에너지:%d/%d   방어막:%d", energy, ENERGY_MAX, block);
+
+        gotoxy(M_X + 2, M_Y + 18);
+        printf("조작: ↑↓ 선택 | ENTER 사용 | SPACE 턴종료 | ESC 도주(임시)");
+
+        gotoxy(M_X + 2, M_Y + 6);
+        printf("상태: ");
+
+        if (enemy.poison > 0) printf("[독%d] ", enemy.poison);
+        if (enemy.burn > 0) printf("[화%d] ", enemy.burn);
+        if (enemy.vuln > 0) printf("[취%d] ", enemy.vuln);
+        if (enemy.weak > 0) printf("[약%d] ", enemy.weak);
+
+        // 오른쪽: 장착 6개 표시
+        drawEquippedSkillsUI(p, selected);
+
+        int ch = _getch();
+
+        if (ch == 27) { //esc
+            int roll = rand() % 100;
+
+            if (roll < 50) {
+                renderMessage("가까스로 전투에서 벗어났다. 아무 키.");
+                wait_any_key();
+                return 0;
+            }
+            else {
+                int dmg = enemy.atk;
+
+                renderMessage("도주 실패. 적의 반격을 받았다. 아무 키.");
+                wait_any_key();
+
+                int taken = dmg;
+                if (block > 0) {
+                    int used = (block >= taken) ? taken : block;
+                    block -= used;
+                    taken -= used;
+                }
+
+                if (taken > 0) {
+                    p->HP -= taken;
+                    if (p->HP < 0) p->HP = 0;
+                }
+
+                char buf[128];
+                sprintf_s(buf, sizeof(buf),
+                    "반격 피해 %d! (체력 %d/%d) 아무 키.",
+                    dmg, p->HP, p->maxHP);
+                renderMessage(buf);
+                wait_any_key();
+
+                ApplyTurnEnd_Player(p);
+                ApplyTurnEnd_Enemy(&enemy);
+
+                energy = ENERGY_MAX;
+                zeroUsedThisTurn = 0;
+                block = 0;
+
+                continue;
+            }
+
+        }
+
+        // 턴 종료 → 적 턴 → 내 턴 에너지 회복
+        if (ch == ' ') { // 턴 종료
+            // 1️ 플레이어 턴 종료 처리 (화상, 취약 감소 등)
+            ApplyTurnEnd_Player(p);
+
+            // 2️ 적 턴 실행
+            enemyTurn(p, &enemy, &block);
+
+            // 3️ 적 턴 종료 처리 (화상, 취약 감소 등)
+            ApplyTurnEnd_Enemy(&enemy);
+
+            // 4️ 다음 플레이어 턴 준비
+            energy = ENERGY_MAX;
+            zeroUsedThisTurn = 0;
+            block = 0;   // 방어도는 턴 종료 시 초기화
+
+            continue;
+        }
+
+        // 사용
+        if (ch == 13) {
+            if (p->equip[selected] == -1) {
+                renderMessage("이 슬롯은 비어있다. 도감(E)에서 장착해라. 아무 키.");
+                wait_any_key();
+            }
+            else {
+                Skill* s = &codexSkills[p->equip[selected]];
+
+                if (s && s->cost == 0 && zeroUsedThisTurn) {
+                    renderMessage("0비용 스킬은 턴당 1회만 사용 가능! (아무 키)");
+                    wait_any_key();
+                    continue;
+                }
+
+                if (applySkill(p, &enemy, &block, &energy, s)) {
+                    if (s && s->cost == 0)
+                        zeroUsedThisTurn = 1;
+                }
+                continue;
+            }
+        }
+
+
+        // 선택 이동
+        if (ch == 224 || ch == 0) {
+            ch = _getch();
+            if (ch == 72) { // ↑
+                selected--;
+                if (selected < 0) selected = MAX_EQUIP - 1;
+            }
+            else if (ch == 80) { // ↓
+                selected++;
+                if (selected >= MAX_EQUIP) selected = 0;
+            }
+        }
+    }
+}
+
+// --------------------
+// 랜덤 문장
+// --------------------
+const char* pickRandomLine() {
+    static const char* lines[] = {
+        "음습한 던전 속에서 고요함이 느껴진다...",
+        "어둠 속에서 청각이 예민해진 기분이다..",
+        "이 길이 맞는 것 같은 느낌이든다.",
+        "뭔가 수상한 기운이 느껴진다.",
+        "무언의 압박감이 느껴진다...",
+        "발소리가 들린다.",
+        "떨리는 심장의 파동이 온 몸을 관통한다.",
+        "정적 속에서 심장 소리만이 또렷이 들린다."
+    };
+    int count = (int)(sizeof(lines) / sizeof(lines[0]));
+    return lines[rand() % count];
+}
+
+void renderAction(int ch) {
+    gotoxy(MSG_X + 2, MSG_Y + 3);
+
+    if (ch == 'w' || ch == 'W')      printf("%-66s", "앞으로 이동했다");
+    else if (ch == 's' || ch == 'S') printf("%-66s", "뒤로 이동했다");
+    else if (ch == 'a' || ch == 'A') printf("%-66s", "왼쪽을 바라본다");
+    else if (ch == 'd' || ch == 'D') printf("%-66s", "오른쪽을 바라본다");
+    else if (ch == 'f' || ch == 'F') printf("%-66s", "층을 이동한다");
+    else if (ch == 'e' || ch == 'E') printf("%-66s", "도감을 연다");
+    else                              printf("%-66s", "...");
+}
+
+// --------------------
+// 고정 인카운터 처리(B/S/C)
+// --------------------
+void HandleTileEvent(Player* p, char map[H][W + 1]) {
+    char t = map[p->y][p->x];
+
+    if (t == 'C') {
+        p->hasCheckpoint = 1;
+        p->cpX = p->x;
+        p->cpY = p->y;
+        renderMessage("체크포인트 등록! 죽으면 여기로 돌아온다. 아무 키.");
+        wait_any_key();
+        return;
+    }
+
+    if (t == 'B') {
+        renderMessage("상자를 발견했다! 스킬 1개 해금. 아무 키.");
+        wait_any_key();
+        UnlockOneSkill(p, p->floor);
+
+        // 상자는 1회성 처리
+        map[p->y][p->x] = '.';
+        return;
+    }
+
+    if (t == 'S') {
+        renderMessage("상인을 만났다! (스킬 1개 해금) 아무 키.");
+        wait_any_key();
+        UnlockOneSkill(p, p->floor);
+        map[p->y][p->x] = '.';
+        // 상인은 고정(유지)
+        return;
+    }
+}
+
+
+// 이동
 void turnL(Player* p) { p->dir = (Dir)((p->dir + 3) % 4); }
 void turnR(Player* p) { p->dir = (Dir)((p->dir + 1) % 4); }
 
@@ -514,12 +1267,9 @@ int moveBack(Player* p, char map[H][W + 1]) {
     return 0;
 }
 
-int checkEncounterAfter4Safe30(void) {
+int checkEncounterAfterSafeMoves(void) {
     moveCountSinceLastBattle++;
-
-    if (moveCountSinceLastBattle <= 6)
-        return 0;
-
+    if (moveCountSinceLastBattle <= 6) return 0;
     return (rand() % 100) < 35;
 }
 
@@ -538,312 +1288,19 @@ void renderMaze(Player* p, char map[H][W + 1]) {
                 printf("##");
             }
             else {
-                printf("  ");
+                char t = map[y][x];
+                if (t == 'B' || t == 'S' || t == 'C') printf("%c ", t);
+                else printf("  ");
             }
         }
     }
 }
 
-void renderMessage(const char* msg) {
-    gotoxy(MSG_X + 2, MSG_Y + 2);
-    printf("%-66s", msg ? msg : "...");
-}
 
-// 카드 UI + 배틀 루프
-void drawboxcard(int x, int y, const Card* c, int selected) {
-    gotoxy(x, y);     printf("+------------+");
-    gotoxy(x, y + 1); printf("|            |");
-    gotoxy(x, y + 2); printf("|            |");
-    gotoxy(x, y + 3); printf("|            |");
-    gotoxy(x, y + 4); printf("|            |");
-    gotoxy(x, y + 5); printf("|            |");
-    gotoxy(x, y + 6); printf("|            |");
-    gotoxy(x, y + 7); printf("+------------+");
-
-    if (selected) {
-        gotoxy(x - 2, y + 3);  printf(">>");
-        gotoxy(x + 14, y + 3); printf("<<");
-    }
-
-    gotoxy(x + 2, y + 1);  printf("%-8s", c->name);
-    gotoxy(x + 10, y + 1); printf("%2d", c->cost);
-    gotoxy(x + 2, y + 4);  printf("D:%2d B:%2d", c->dmg, c->block);
-    gotoxy(x + 2, y + 5);  printf("H:%2d", c->heal);
-    gotoxy(x + 2, y + 2);  printf("%-10.10s", c->dec);
-}
-
-void drawVerticalCards(int basex, int basey, Card hand[], int n, int selected) {
-    int gapY = 9;
-    for (int i = 0; i < n; i++) {
-        drawboxcard(basex, basey + i * gapY, &hand[i], (i == selected));
-    }
-}
-
-int initHand(Card hand[], int max) {
-    int n = 0;
-    if (max < 3) return 0;
-
-    strcpy(hand[n].name, "Attack");
-    hand[n].cost = 1;
-    hand[n].dmg = 10;
-    hand[n].block = 0;
-    hand[n].heal = 0;
-    strcpy(hand[n].dec, "Basic ATK");
-    n++;
-
-    strcpy(hand[n].name, "Defend");
-    hand[n].cost = 1;
-    hand[n].dmg = 0;
-    hand[n].block = 5;
-    hand[n].heal = 0;
-    strcpy(hand[n].dec, "Block DMG");
-    n++;
-
-    strcpy(hand[n].name, "Heal");
-    hand[n].cost = 2;
-    hand[n].dmg = 0;
-    hand[n].block = 0;
-    hand[n].heal = 8;
-    strcpy(hand[n].dec, "Restore HP");
-    n++;
-
-    return n;
-}
-
-int updateSelectedCard(int selected, int cardCount, int ch) {
-    if (ch == 224 || ch == 0) { // 방향키 prefix
-        ch = _getch();
-        if (ch == 72) { // ↑
-            selected--;
-            if (selected < 0) selected = cardCount - 1;
-        }
-        else if (ch == 80) { // ↓
-            selected++;
-            if (selected >= cardCount) selected = 0;
-        }
-    }
-    return selected;
-}
-
-void useSelectedCard(Player* p, const Card* c) {
-    char buf[128];
-
-    // 일단 메시지 출력
-    sprintf(buf, "Used: %s (DMG:%d BLOCK:%d HEAL:%d)", c->name, c->dmg, c->block, c->heal);
-    renderMessage(buf);
-
-    // 실제 반영은 예시로 heal만
-    if (c->heal > 0) {
-        p->HP += c->heal;
-        if (p->HP > 999) p->HP = 999; // 임시 상한
-    }
-
-    playerstate(p);
-    Sleep(400);
-}
-
-void gainExp(Player* p, int amount)
-{
-    p->exp += amount;
-
-    while (p->exp >= p->expToNext) {
-        p->exp -= p->expToNext;
-        p->level++;
-
-        // 성장 규칙(너가 원하는대로 나중에 바꿔도 됨)
-        p->HP += 10;
-        p->expToNext += 5;
-
-        renderMessage("LEVEL UP! HP +10");
-        Sleep(600);
-    }
-}
-
-int applyCard(Player* p, Enemy* e, int* block, int* energy, const Card* c)
-{
-    char buf[128];
-
-    if (*energy < c->cost) {
-        renderMessage("에너지가 부족하다!");
-        Sleep(250);
-        return 0;
-    }
-
-    *energy -= c->cost;
-
-    if (c->dmg > 0) {
-        e->hp -= c->dmg;
-        if (e->hp < 0) e->hp = 0;
-    }
-    if (c->block > 0) {
-        *block += c->block;
-    }
-    if (c->heal > 0) {
-        p->HP += c->heal;
-        if (p->HP > 999) p->HP = 999;
-    }
-
-    sprintf(buf, "Used %s | EN:%d | EnemyHP:%d", c->name, *energy, e->hp);
-    renderMessage(buf);
-    Sleep(250);
-    return 1;
-}
-
-void enemyTurn(Player* p, Enemy* e, int* block)
-{
-    char buf[128];
-
-    // 이번 턴 공격 결정(간단)
-    int dmg = e->atk;
-    e->intent = rand() % 2;      // 0=공격,1=강공
-    if (e->intent == 1) dmg += 4;
-
-    int taken = dmg;
-
-    if (*block > 0) {
-        int used = (*block >= taken) ? taken : *block;
-        *block -= used;
-        taken -= used;
-    }
-
-    if (taken > 0) {
-        p->HP -= taken;
-        if (p->HP < 0) p->HP = 0;
-    }
-
-    sprintf(buf, "%s attacks! DMG:%d", e->name, dmg);
-    renderMessage(buf);
-    Sleep(450);
-
-    // 턴 종료 시 방어도 사라짐(슬더스 스타일)
-    *block = 0;
-}
-
-void battleLoop(Player* p)
-{
-    Card hand[5];
-    int handCount = initHand(hand, 5);
-    int selectedCard = 0;
-
-    Enemy enemy = makeEnemy();
-
-    int energyMax = 3;
-    int energy = energyMax;
-    int block = 0;
-
-    while (1) {
-        // 승패 체크
-        if (enemy.hp <= 0) {
-            renderMessage("승리! 경험치를 획득했다.");
-            Sleep(700);
-            gainExp(p, enemy.expReward);
-            break;
-        }
-        if (p->HP <= 0) {
-            renderMessage("패배... (임시)"); // 나중에 게임오버 처리
-            Sleep(900);
-            break;
-        }
-
-        // 화면 그리기
-        drawUIFrame();
-        sw();
-        playerstate(p);
-        renderDeckObject(10);
-
-        clearBoxInner(M_X, M_Y, M_W, M_H);
-        gotoxy(M_X + 2, M_Y + 2);
-        printf("<< BATTLE MODE >>");
-
-        gotoxy(M_X + 2, M_Y + 4);
-        printf("Enemy: %-10s  HP:%3d/%3d", enemy.name, enemy.hp, enemy.maxHp);
-
-        gotoxy(M_X + 2, M_Y + 6);
-        printf("ENERGY: %d/%d   BLOCK: %d", energy, energyMax, block);
-
-        gotoxy(M_X + 2, M_Y + 8);
-        printf("↑↓ 선택 | ENTER 사용 | SPACE 턴종료 | ESC 도주(임시)");
-
-        // 카드 UI
-        drawVerticalCards(CARD_UI_X, CARD_UI_Y, hand, handCount, selectedCard);
-
-        int ch = _getch();
-
-        if (ch == 27) { // ESC
-            renderMessage("도주했다...(임시)");
-            Sleep(500);
-            break;
-        }
-
-        if (ch == ' ') { // 턴 종료 → 적 턴 → 내 턴 에너지 회복
-            enemyTurn(p, &enemy, &block);
-            energy = energyMax;
-            continue;
-        }
-
-        if (ch == 13) { // 카드 사용
-            applyCard(p, &enemy, &block, &energy, &hand[selectedCard]);
-            continue;
-        }
-
-        selectedCard = updateSelectedCard(selectedCard, handCount, ch);
-    }
-}
-
-
-// 던전 메시지/액션/전투 진입
-
-
-void renderAction(int ch) {
-    gotoxy(MSG_X + 2, MSG_Y + 3);
-
-    if (ch == 'w' || ch == 'W')      printf("%-66s", "앞으로 이동했다");
-    else if (ch == 's' || ch == 'S') printf("%-66s", "뒤로 이동했다");
-    else if (ch == 'a' || ch == 'A') printf("%-66s", "왼쪽을 바라본다");
-    else if (ch == 'd' || ch == 'D') printf("%-66s", "오른쪽을 바라본다");
-    else   printf("%-66s", "...");
-}
-
-const char* pickRandomLine() {
-    static const char* lines[] = {
-        "음습한 던전 속에서 고요함이 느껴진다...",
-        "어둠 속에서 청각이 예민해진 기분이다..",
-        "이 길이 맞는 것 같은 느낌이든다.",
-        "뭔가 수상한 기운이 느껴진다.",
-        "무언의 압박감이 느껴진다...",
-        "지금 처해진 상황에 대해 생각한다, 허나 이내 생각을 멈췄다.",
-        "발소리가 들린다.",
-        "떨리는 심장의 파동이 온 몸을 관통한다.",
-        "불안감이 고조된다.",
-        "검을 쥐어진 손에선 식은땀이 느껴진다.",
-        "공기가 무겁게 가라앉아 폐 속으로 스며든다.",
-        "정적 속에서 심장 소리만이 또렷이 들린다.",
-        "벽 너머에서 무언가 움직인 듯한 착각이 든다.",
-        "발걸음을 옮길 때마다 바닥이 낮게 울린다.",
-        "등 뒤의 어둠이 점점 가까워지는 느낌이다.",
-        "시선이 닿지 않는 곳에 무언가 있을 것만 같다.",
-        "이곳에 오래 머물러선 안 될 것 같다.",
-        "숨을 고르며 긴장을 억지로 눌러본다.",
-        "차가운 공기가 피부를 스친다.",
-        "조용함이 오히려 불안을 키운다.",
-        "작은 소리에도 몸이 반사적으로 굳는다.",
-        "어둠 속에서 방향 감각이 흐려진다.",
-        "지금 내 선택이 옳은지 확신할 수 없다.",
-        "발밑의 그림자가 낯설게 느껴진다.",
-        "여기서는 시간이 느리게 흐르는 듯하다.",
-        "무심코 검자루를 더 강하게 움켜쥔다.",
-        "이 던전은 나를 시험하는 것 같다.",
-        "어둠이 사고마저 잠식하려 든다.",
-        "이곳에 남겨진 흔적들이 의미심장하다.",
-        "긴장 탓인지 숨이 조금 가빠진다.",
-    };
-
-    int count = (int)(sizeof(lines) / sizeof(lines[0]));
-    return lines[rand() % count];
-}
-
-void dungeonLoop(Player* p) {
-    char map[H][W + 1] = {
+// 층별 맵(예시: 모양 같고 고정 인카운터 위치만 다르게)
+void LoadMapForFloor(int floor, char map[H][W + 1]) {
+    // 기본 틀
+    const char* base[H] = {
         "#################################",
         "#..#..............#.............#",
         "#..#..######..###.#..#####..##..#",
@@ -860,8 +1317,41 @@ void dungeonLoop(Player* p) {
         "#################################"
     };
 
+    for (int y = 0; y < H; y++) {
+        strcpy_s(map[y], W + 1, base[y]);
+    }
+
+    // 고정 인카운터 위치를 층마다 다르게 ( 더 추가 가능)
+    if (floor == 0) {
+        map[1][3] = 'C';
+        map[5][6] = 'B';
+        map[10][27] = 'S';
+    }
+    else if (floor == 1) {
+        map[1][5] = 'C';
+        map[7][10] = 'B';
+        map[11][24] = 'S';
+    }
+    else {
+        map[1][7] = 'C';
+        map[6][18] = 'B';
+        map[9][26] = 'S';
+    }
+}
+
+
+// 던전 루프
+void dungeonLoop(Player* p) {
+    char map[H][W + 1];
+
+    LoadMapForFloor(p->floor, map);
+
     if (p->x == 0 && p->y == 0) { p->x = 1; p->y = 1; }
 
+    drawUIFrame();
+    playerstate(p);
+    renderSkillBookObject();
+    //  sw();
     renderMaze(p, map);
     renderMessage(pickRandomLine());
     renderAction(0);
@@ -876,85 +1366,119 @@ void dungeonLoop(Player* p) {
         else if (ch == 's' || ch == 'S') moved = moveBack(p, map);
         else if (ch == 'a' || ch == 'A') turnL(p);
         else if (ch == 'd' || ch == 'D') turnR(p);
-        if (ch == 'e' || ch == 'E') {
-            OpenCodexScene(codexCards, codexCount);
 
-            //던전 화면 복구
+        // 도감 열기(장착 포함)
+        if (ch == 'e' || ch == 'E') {
+            OpenCodexScene(p);
+            ClearPendingInputSafe();
+
+            // 복귀 화면
+
             drawUIFrame();
             playerstate(p);
-            renderDeckObject(10);
-            sw();
+            renderSkillBookObject();
             renderMaze(p, map);
             renderMessage(pickRandomLine());
             renderAction(0);
             continue;
         }
+
+        // 층 이동(예시: F로 다음 층, 3층이면 1층으로)
+        if (ch == 'f' || ch == 'F') {
+            p->floor = (p->floor + 1) % FLOORS;
+            // 층 이동 시 맵 재로드 + 위치 초기화
+            LoadMapForFloor(p->floor, map);
+            p->x = 1; p->y = 1;
+
+            drawUIFrame();
+            playerstate(p);
+            renderSkillBookObject();
+            //  sw();
+            renderMaze(p, map);
+            renderMessage("층을 이동했다. 아무 키.");
+            wait_any_key();
+            renderMessage(pickRandomLine());
+            continue;
+        }
+
+        // 이동/회전 결과 반영
         renderMaze(p, map);
         renderMessage(pickRandomLine());
         renderAction(ch);
         playerstate(p);
-        sw();
-        renderDeckObject(10);
+        //   sw();
+        renderSkillBookObject();
 
-        if (moved && checkEncounterAfter4Safe30()) {
-            renderMessage("적의 기척이 느껴진다...");
-            Sleep(1100);
+        // 이동했으면 타일 이벤트 처리(B/S/C)
+        if (moved) {
+            HandleTileEvent(p, map);
 
-            // 여기서 전투 진입
-            battleLoop(p);
+            // 전투 인카운터
+            if (checkEncounterAfterSafeMoves()) {
+                renderMessage("적의 기척이 느껴진다... 아무 키.");
+                wait_any_key();
 
-            moveCountSinceLastBattle = 0; // 전투 후 안전 초기화
+                battleLoop(p); // 승패 처리 내부에서 체크포인트 respawn까지 함
+                moveCountSinceLastBattle = 0;
 
-            // 던전 UI 복귀 화면 재구성
-            drawUIFrame();
-            playerstate(p);
-            renderDeckObject(10);
-            sw();
-            renderMaze(p, map);
-            renderMessage(pickRandomLine());
-            renderAction(0);
-
-
+                // 전투 후 화면 복귀
+                drawUIFrame();
+                playerstate(p);
+                renderSkillBookObject();
+                // sw();
+                renderMaze(p, map);
+                renderMessage(pickRandomLine());
+                renderAction(0);
+            }
         }
     }
 }
 
-int main() {
-    // 해야할것
-    // 적 디자인(강적은 나중에)
-    // 랜덤 인카운터(적) / 완성
-    // 고정 인카운터(상인),(상자)
-    // 전투 (미완)
-    // 카드 디자인
-    // 카드 원소 상호작용
-    // 전투시 깜빡임 마지막 더블버퍼링,,
 
-    Player player = { 0 };
+// 메인
+int main() {
+
+    Player player;
+    memset(&player, 0, sizeof(player));
 
     setConsoleSize(160, 45);
     showCursor(0);
 
-    // showStartScreen();
-    strcpy_s(player.name, sizeof(player.name), "방랑자");
-    // showNarration(&player);
-
     srand((unsigned)time(NULL));
     InitCodex();
-    FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE));
 
-    player.HP = 100;
+    strcpy_s(player.name, sizeof(player.name), "방랑자");
+    player.maxHP = 100;
+    player.HP = player.maxHP;
+
     player.x = 1;
     player.y = 1;
     player.dir = SOUTH;
+
     player.level = 1;
     player.exp = 0;
     player.expToNext = 10;
 
+    player.floor = 0;
+
+    player.hasCheckpoint = 0;
+    player.cpX = 1;
+    player.cpY = 1;
+
+    for (int i = 0; i < MAX_EQUIP; i++) player.equip[i] = -1;
+    player.equipCount = 0;
+
+    // 시작 장착: 기본 3개(공격/방어/회복)
+    player.equip[0] = 0; // 공격
+    player.equip[1] = 1; // 방어
+    player.equip[2] = 2; // 회복
+    RecountEquip(&player);
+
     drawUIFrame();
     playerstate(&player);
-    renderDeckObject(10);
-    sw();
-    dungeonLoop(&player);
+    renderSkillBookObject();
+    // sw();
 
+    dungeonLoop(&player);
     return 0;
 }
