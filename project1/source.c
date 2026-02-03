@@ -8,6 +8,8 @@
 #include <string.h>
 #include <time.h>
 #include <stdarg.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
 
 #define H 14
 #define W 33
@@ -285,7 +287,7 @@ typedef struct { int x, y; } Pos;
 
 static const Pos JOURNAL_POS[FLOORS][3] = {
     // floor 0의 일지 3개 위치 (x,y)
-    { {1,4}, {14,4}, {8,7} },
+    { {1,4}, {14,4}, {1,10} },
     // floor 1
     { {9,3}, {17,7}, {7,12} },
     // floor 2
@@ -340,6 +342,7 @@ typedef struct {
     unsigned char seen[FLOORS][H][W];   // 한 번이라도 본 타일
     unsigned char visible[H][W];
     int boss4Dead;
+    int gritUsed;
 } Player;
 
 
@@ -512,16 +515,21 @@ int CalcPlayerDamage(int base, Enemy* e, Player* p)
     int dmg = base;
 
     // 약화: 주는 피해 감소
-    if (p->weak > 0) dmg = dmg * 65 / 100;
+    if (e->weak > 0) {
+        dmg = dmg * 65 / 100; // Reduce damage by 35%
+    }
 
     // 취약: 받는 피해 증가 (원문 그대로 유지)
-    if (e->vuln > 0) dmg = dmg * 135 / 100;
+    if (e->vuln > 0) {
+        dmg = dmg * 130 / 100; // Increase damage by 35%
+    }
 
     // 독: 공격 시 추가 피해
-    if (e->poison > 0) dmg += e->poison;
+    if (e->poison > 0) {
+        dmg += e->poison;
+    }
 
-    if (dmg < 0) dmg = 0;
-    return dmg;
+    return (dmg < 0) ? 0 : dmg;
 }
 
 // --------------------
@@ -547,6 +555,8 @@ const char* JOURNAL_TEXT[FLOORS][4][160] = {
               "",
              "중독, 화상, 약화, 취약…, 보이지 않는 상처가 전투를 잠식한다.",
               "",
+              "약화는 피해를 줄여주며, 취약은 피해를 더해준다.",
+              "",
              "상태 이상을 무시하는 순간, 전투는 이미 기울어 있다.",
               "",
              "모든 스킬이 정답은 아니다. 지금 필요한 것이 무엇인지 판단하라.",
@@ -567,26 +577,30 @@ const char* JOURNAL_TEXT[FLOORS][4][160] = {
             "체크포인트는 돌아갈 수 있는 마지막 지점이다.",
             "",
             "이곳에서 죽는다는 것은, 모든 것이 끝났다는 뜻은 아니다.",
+            "",
+            "또한 강적 주위엔 가끔식 일반 몬스터가 있을수있다.",
             NULL
         },
         {
             "1층 일지3",
              "",
-             "아무리 생각해도 잘 모르겠다.",
+             "상인은 던전 내부에 유일한 동반자다.",
              "",
-             "상인은 어떤 존재일까?",
+             "적어도 뒤통수 칠 일은 없으니",
              "",
-             "인간은 아닌것 같고",
+             "어쩌면 동료보다 믿음직 하다.",
              "",
-             "다른 학자나 모험가들의 말에 따르면...",
+             "상인이 파는 물약은 상처를 치료해주고",
              "",
-             "'던전 그 자체'라는 말이 있기도하고",
+             "떄로는 방어구를 씌워 주기도 한다.",
              "",
-             "뭐 모험가 한테는 없는거 보단 낮지, 덕분에 상처도 치료했고",
+             "핵심은 상인이 파는 유물이다",
              "",
-             "난 다시 그 팔랑크스가 뭔가하는 놈을 처리하러 가보겠다",
+             "총 3개까지 구매가능하며, 절대로 되돌릴수 없다.",
              "",
-             "내 자신과 너에게 행운을",
+             "고층으로 갈수록 더 높은 효과를 가진 유물이 나올수도 있다.",
+             "",
+             "그렇지만 선택은 자유다, 미리 3개를 채우든 미래를 보든.",
              "",
             NULL
         }
@@ -874,7 +888,18 @@ int readKey()
 
     return ch;
 }
-
+void startback()
+{
+    NarrHeader();
+    printf("                                                 화면을 확대/축소시 깨질수 있으며, 이떄 나래이션 부분을 재외한 화면에서\n\n");
+    printf("                                                 R 키를 눌러 화면을 재정렬 해주세요.\n\n");
+    printf("                                                 처음 타이틀과 나래이션 부분에선 화면을 확대하지 마시고.\n\n");
+    printf("                                                 던전에 들어간 다음 확대 후 R 키를 눌러주세요.\n\n");
+    printf("                                                 !!이름을 한글로 작성했을시 이동과 기능작동이 안될수 있습니다!!그럴떈 한 / 영키를 눌러주세요\n\n");
+    printf("                                                 그럼 행운을 빕니다.\n\n");
+    printf("                                                 [Enter] 다음\n\n");
+    waitenter();
+}
 void narrationend()
 {
     DB_BeginFrame();
@@ -970,14 +995,9 @@ static void ConsolePrint(const char* fmt, ...)
 
 void showNarration(Player* p)
 {
+    PlaySound(TEXT("sound/bgm/dark_outside.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
     // ---- 1페이지 ----
-    NarrHeader();
-    printf("                                                 화면을 확대/축소시 깨질수 있으며, 이떄 나래이션 부분을 재외한 화면에서\n\n");
-    printf("                                                 R 키를 눌러 화면을 재정렬 해주세요.\n\n");
-    printf("                                                 !!이름을 한글로 작성했을시 이동이 안될수 있습니다!!그럴떈 한 / 영키를 눌러주세요\n\n");
-    printf("                                                 그럼 행운을 빕니다.\n\n");
-    printf("                                                 [Enter] 다음\n\n");
-    waitenter();
+    
     NarrHeader();
     printf("                                                 한적한 새벽, 당신은 술집에서 나와 골목길을 걷고 있다.\n\n");
     waitenter();
@@ -999,7 +1019,9 @@ void showNarration(Player* p)
     waitenter();
     printf("                                                 국가의 재정 문제로, 죄에 따른 형벌이 늘어났다는 이야기가.\n\n");
     waitenter();
-    printf("                                                 단순한 절도만으로도 감옥에서 썩기엔 충분했다.\n\n");
+    printf("                                                 죄를 짓지 않아도 얼마든지 목이 날아갈 수 있다.\n\n");
+    waitenter();
+    printf("                                                 단순한 절도만으로도 감옥에서 썩기엔 충분했다. 물론 약간의 폭력도.\n\n");
     waitenter();
     printf("                                                 하지만... 목격자는 없다.\n\n");
     waitenter();
@@ -1013,9 +1035,15 @@ void showNarration(Player* p)
     NarrHeader();
     printf("                                                 [Enter] 다음\n\n");
     waitenter();
-    printf("                                                 으..으...아ㅡ!!\n\n");
+    printf("                                                「..으...아ㅡ!!」\n\n");
     waitenter();
-    printf("                                                 노숙자는 말을 못하는 사람이었다.\n\n");
+    printf("                                                「 으..으...아ㅡ!!」\n\n");
+    waitenter();
+    printf("                                                 노숙자의 외침을 들은 당신은 생각했다.\n\n");
+    waitenter();
+    printf("                                                 ........\n\n");
+    waitenter();
+    printf("                                                 노숙자는 벙어리다.\n\n");
     waitenter();
     printf("                                                 ........\n\n");
     waitenter();
@@ -1029,21 +1057,23 @@ void showNarration(Player* p)
         Ending_GoodExit(p);
         return; // 혹시 몰라서
     }
-    printf("                                                 당신의 입가에 미소가 번졌습니다.\n\n");
+    printf("                                                 당신의 입가에 미소가 번졌다.\n\n");
     waitenter();
     printf("                                                 당신의 높은 주먹은 이내 노숙자의 목걸이를 향해 뻗어갔다.\n\n");
     waitenter();
     printf("                                                 노숙자는 필사적으로 저항했지만, 이내 목걸이를 빼앗기고 바닥을 나뒹굴렀다.\n\n");
     waitenter();
-    printf("                                                 목걸이를 잃은 순간, 뭔가 끊어진 듯했다.\n\n");
+    printf("                                                「..으...악!!.」\n\n");
+    waitenter();
+    printf("                                                 목걸이를 잃은 순간, 노숙자는 뭔가 끊어진 듯했다.\n\n");
     waitenter();
     printf("                                                 그 순간, 노숙자가 달려들었다.\n\n");
     waitenter();
-    printf("                                                 ...그아!!!...\n\n");
+    printf("                                                「...그아!!!...」\n\n");
     waitenter();
     printf("                                                 당신의 머리에선 피가 떨어졌고, 노숙자의 손엔 피 묻은 돌이 들려 있었다.\n\n");
     waitenter();
-    printf("                                                 잠시 후, 당신은 정신을 차렸습니다.\n\n");
+    printf("                                                 잠시 후, 당신은 정신을 차렸다.\n\n");
     waitenter();
     printf("                                                 눈앞의 노숙자는 쓰려져있었고 당신의 손에는 마찬가지로 피 묻은 돌이 쥐어져 있었다.\n\n");
     waitenter();
@@ -1051,9 +1081,18 @@ void showNarration(Player* p)
     waitenter();
     printf("                                                 당신은 노숙자를 죽였다.\n\n");
     waitenter();
+    NarrHeader();
     printf("                                                 「죽이려고 한 건 아니었는데…」\n\n");
     waitenter();
     printf("                                                 식은땀이 흐르며 몸이 굳어, 생각조차 제대로 할 수 없었다.\n\n");
+    waitenter();
+    printf("                                                 날이 밝으면 난 잡힐거다. 반드시.\n\n");
+    waitenter();
+    printf("                                                 알리바이는 충분하다 술집 맞음편 골목길 거기다 난 오늘 그 술집의 마지막 손님이다.\n\n");
+    waitenter();
+    printf("                                                 알리바이 따위는 없어도 된다. 정부는 충분히 만들수 있으니까.\n\n");
+    waitenter();
+    printf("                                                 또한 지금 당장이라도 순찰중인 경비에게 잡힐수 있다.\n\n");
     waitenter();
     printf("                                                 그떄, 당신의 시선이 벽면에 붙은 한 장의 의뢰서에 멈췄다.\n\n");
     waitenter();
@@ -1070,6 +1109,8 @@ void showNarration(Player* p)
     printf("                                                 중급 던전 임에도 생존자가 없어 저주 받은 던전이라 불리우는 곳, 즉 아무도 올사람이 없다는 것이다.\n");
     waitenter();
     printf("                                                 모험가들 사이에선 예로부터 시체를 은폐하는 데 던전만 한 곳은 없다는 말이 떠돌았다.\n\n");
+    waitenter();
+    printf("                                                 당신은 곳바로 노숙자의 시체를 숨겨 집으로와 그곳에 갈 준비를 한다.\n\n");
     waitenter();
     printf("                                                「그걸 진짜로 하게 될 줄이야.. 」\n\n");
     waitenter();
@@ -1120,6 +1161,8 @@ void showNarration(Player* p)
     printf("                                                 던전은 클리어 하기 전까진 나갈수 없다.\n\n");
     waitenter();
     printf("                                                 %s은(는) 마음을 한차례 심호흡을 한 후 커다란 문을 열고 앞으로 나아간다.\n\n", p->name);
+    waitenter();
+    printf("                                                 그 심호흡은 썩어가는 피에 찌든 악취를 동반헀다.\n\n");
     waitenter();
 }
 
@@ -1210,7 +1253,29 @@ void renderMessageLine(int line, const char* msg)
     gotoxy(MSG_X + 2, y);
     printf("%-66s", msg ? msg : "");
 }
-
+const char* pickRandomLine()
+{
+    static const char* lines[] = {
+        "음습한 던전 속에서 고요함이 느껴진다...",
+        ".....",
+        "어둠 속에서 청각이 예민해진 기분이다..",
+         ".....",
+        "이 길이 맞는 것 같은 느낌이든다.",
+         ".....",
+        "뭔가 수상한 기운이 느껴진다.",
+         ".....",
+        "무언의 압박감이 느껴진다...",
+         ".....",
+        "발소리가 들린다.",
+         ".....",
+        "떨리는 심장의 파동이 온 몸을 관통한다.",
+         ".....",
+        "정적 속에서 심장 소리만이 또렷이 들린다."
+         ".....",
+    };
+    int count = (int)(sizeof(lines) / sizeof(lines[0]));
+    return lines[rand() % count];
+}
 void renderMessage(const char* msg)
 {
     renderMessageLine(0, msg);
@@ -1276,117 +1341,13 @@ void renderSkillBookObject()
     gotoxy(x, y + 1);  printf("  /___________/||");
     gotoxy(x, y + 2);  printf(" +------------+||");
     gotoxy(x, y + 3);  printf(" |            |||");
-    gotoxy(x, y + 4);  printf(" |  스 킬 북  |||");
+    gotoxy(x, y + 4);  printf(" |    sKill   |||");
     gotoxy(x, y + 5);  printf(" |            |||");
     gotoxy(x, y + 6);  printf(" |            |||");
     gotoxy(x, y + 7);  printf(" |            |||");
     gotoxy(x, y + 8);  printf(" |            |||");
     gotoxy(x, y + 9);  printf(" |            |||");
     gotoxy(x, y + 10); printf(" +------------+/");
-}
-void narrationPhal()
-{
-    DB_BeginFrame();
-
-    NarrHeader();
-    printf("                                                 [Enter] 다음\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                「끝났네…」 \n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 기나긴 혈투 끝에 팔랑크스는 무너졌다\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                「아니, 끝난 건 아니지」 \n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 당신은 심장을 겨낭한후 칼을 꼿아 넣는다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                「...뭐야..?」 \n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 그러나 느껴지는건 없다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 당신이 잡은것은 그저 '껍데기' 일 뿐이다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 마치 곤충의 껍질같은 지금의 팔랑크스는 그저 껍질이다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 던전에서 나갈수있는 귀환석은 보이지 않는다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 던전이 떨리며 문이 열린다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 만약 나아간다면 두 번 다신 이곳에 올 수 없을것이다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 만일을 위해 이 층에서 준비를 하는 것이 현명하다.\n\n");
-    DB_Present();
-    waitenter();
-   
-    DB_Present();
-    waitenter();
-    DB_BeginFrame();
-    drawUIFrame();
-   
-    renderSkillBookObject();
-    DB_Present();
-}
-void narrationp_end()
-{
-    DB_BeginFrame();
-    NarrHeader();
-    printf("                                                 [Enter] 다음\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                「죽였다」 \n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 알수없는 생명체는 눈 앞에 죽어있다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 그렇지만 귀환석은 보이지않는다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                「왜...안..보이건데..젠장!」\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 던전은 다시 움직인다. \n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 문이열린다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 나아간다 다시.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                「아.....」\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 금방이라도 부셔질것 같은 철장 앞\n\n");
-    DB_Present();
-    waitenter();
-    DB_Present();
-    printf("                                                 당신이 할수있는 방법은 하나 뿐이다.\n\n");
-    DB_Present();
-    waitenter();
-    printf("                                                 'q' 목숨을 끊는다.\n\n");
-    DB_Present();
-    waitenter();
-
-
-    DB_Present();
-    waitenter();
-    DB_BeginFrame();
-    drawUIFrame();
-
-    renderSkillBookObject();
-    DB_Present();
 }
 
 // --------------------
@@ -1436,9 +1397,9 @@ const char* GetPassiveDesc(int id)
     case 4: return "독/화상 부여량 +1";
     case 5: return "0비용 스킬 턴당 사용 제한이 1->2";
     case PASSIVE_GRIT_HEART:
-        return "전투 중 HP 0 도달 시 1회, 최대체력 30%로 회복(구현X)";
+        return "전투 중 HP 0 도달 시 1회, 최대체력 30%로 회복";
     case PASSIVE_FINAL_PREP:
-        return "전투 시작 첫 턴에 에너지 +2(구현X)";
+        return "전투 시작 첫 턴에 에너지 +2";
     default: return "";
     }
 }
@@ -1588,7 +1549,7 @@ void OpenShop(Player* p)
 
         // 패시브(층당 2개)
         gotoxy(14, 9);
-        printf("== 패시브(최대 3개 장착) ==");
+        printf("== 유물(최대 3개 장착) ==");
 
         for (int i = 0; i < 2; i++) {
             int pid = PASSIVE_BY_FLOOR[p->floor][i].passiveId;
@@ -1615,7 +1576,7 @@ void OpenShop(Player* p)
         PrintPassives(p, 90, 10);
 
         gotoxy(14, 32);
-        printf("선택: 1~2(패시브) / 3~6(물약) | ESC/0: 나가기");
+        printf("선택: 1~2(유물) / 3~6(물약) | ESC/0: 나가기");
 
         DB_Present();
 
@@ -2040,54 +2001,54 @@ void ApplyTurnEnd_Enemy(Enemy* e)
 void InitCodex()
 {
     for (int i = 0; i < MAX_SKILLS; i++) {
-        SetSkill(i, "미정", 99, 0, 0, 0, 0, "아직 없음", EFF_NONE, 0);
+        SetSkill(i, "", 99, 0, 0, 0, 0, "아직 없음", EFF_NONE, 0);
     }
 
     // ====== 층1 스킬 18개 (0~17) ======
     SetSkill(0, "휘두르기", 1, 10, 0, 0, 1, "기본적인 공격", EFF_NONE, 0);
     SetSkill(1, "방패들기", 1, 0, 6, 0, 1, "기본적인 방어", EFF_NONE, 0);
-    SetSkill(2, "회복", 1, 0, 0, 10, 1, "기본적인 회복", EFF_NONE, 0);
+    SetSkill(2, "회복", 2, 0, 0, 10, 1, "기본적인 회복", EFF_NONE, 0);
 
     SetSkill(3, "속공", 0, 6, 0, 0, 0, "빠르고 간결한 공격", EFF_NONE, 0);
-    SetSkill(4, "찌르기", 1, 8, 0, 0, 0, "독 상태 적에게 추가 피해 + 4", EFF_NONE, 0);
-    SetSkill(5, "강타", 2, 18, 0, 0, 0, "취약 적에게 추가 피해 + 10", EFF_NONE, 0);
+    SetSkill(4, "찌르기", 1, 7, 0, 0, 0, "독 상태 적에게 추가 피해 + 4", EFF_NONE, 0);
+    SetSkill(5, "강타", 2, 12, 0, 0, 0, "취약 적에게 추가 피해 + 10", EFF_NONE, 0);
 
     SetSkill(6, "독 바르기", 1, 4, 0, 0, 0, "독 3 부여, 칼날에 독을 바르는 것 만큼 간단한 일은 없지", EFF_POISON, 3);
     SetSkill(7, "침식", 1, 0, 0, 0, 0, "독 5 부여", EFF_POISON, 5);
     SetSkill(8, "신경 독소", 2, 6, 0, 0, 0, "독 4 부여", EFF_POISON, 4);
 
-    SetSkill(9, "화염 참격", 2, 14, 0, 0, 0, "화상 3 부여", EFF_BURN, 3);
-    SetSkill(10, "불씨", 1, 4, 0, 0, 0, "화상 3 부여", EFF_BURN, 3);
+    SetSkill(9, "화염 참격", 2, 14, 0, 0, 0, "화상 4 부여", EFF_BURN, 4);
+    SetSkill(10, "불씨", 1, 4, 0, 0, 0, "화상 4 부여", EFF_BURN, 4);
     SetSkill(11, "잔불", 0, 0, 0, 0, 0, "0비용 화상 1", EFF_BURN, 1);
 
     SetSkill(12, "약점 노출", 1, 0, 0, 0, 0, "취약 2턴", EFF_VULN, 2);
     SetSkill(13, "기력 붕괴", 1, 6, 0, 0, 0, "약화 2턴", EFF_WEAK, 2);
     SetSkill(14, "압박", 2, 0, 0, 0, 0, "취약 3턴", EFF_VULN, 3);
 
-    SetSkill(15, "집중", 2, 0, 20, 0, 0, "안정적인 방어", EFF_NONE, 0);
-    SetSkill(16, "철벽", 2, 10, 16, 0, 0, "최선의 방어는 공격", EFF_NONE, 0);
-    SetSkill(17, "흡혈", 2, 10, 0, 15, 0, "공격 후 회복", EFF_NONE, 0);
+    SetSkill(15, "집중", 2, 0, 17, 0, 0, "안정적인 방어", EFF_NONE, 0);
+    SetSkill(16, "철벽", 2, 8, 16, 0, 0, "최선의 방어는 공격", EFF_NONE, 0);
+    SetSkill(17, "흡혈", 2, 8, 0, 15, 0, "공격 후 회복", EFF_NONE, 0);
 
     // ====== 2층 스킬 18개 (18~35) ======
 
 // 기본 상위 밸류(2층 표준 스탯)
-    SetSkill(18, "안면 강타", 1, 16, 0, 0, 0, "안정적인 중급 공격", EFF_NONE, 0);
-    SetSkill(19, "강화 방어", 1, 0, 10, 0, 0, "중급 방어", EFF_NONE, 0);
-    SetSkill(20, "응급 처치", 2, 0, 0, 14, 0, "중급 회복", EFF_NONE, 0);
+    SetSkill(18, "안면 강타", 1, 15, 0, 0, 0, "안정적인 중급 공격", EFF_NONE, 0);
+    SetSkill(19, "강화 방어", 1, 0, 11, 0, 0, "중급 방어", EFF_NONE, 0);
+    SetSkill(20, "응급 처치", 1, 0, 0, 14, 0, "중급 회복", EFF_NONE, 0);
 
     // 0코(밸류 상승은 있지만 패시브(0코 2회)랑 같이 쓰면 강해짐)
     SetSkill(21, "속공+", 0, 8, 0, 0, 0, "0비용 공격", EFF_NONE, 0);
-    SetSkill(22, "맹독은잔불에타들어", 0, 0, 0, 0, 0, "화상 2와 독 1를 부여한다", EFF_NONE, 0);
+    SetSkill(22, "맹독은잔불속에", 0, 0, 0, 0, 0, "화상 2와 독 1를 부여한다", EFF_NONE, 0);
 
     // 독 라인 (1층보다 부여량/딜이 증가)
     SetSkill(23, "독칼", 1, 15, 0, 0, 0, "공격 + 독 2", EFF_POISON, 2);
-    SetSkill(24, "그 혈관 속 맹독을", 1, 5, 0, 0, 0, "독 6 부여", EFF_POISON, 7);
-    SetSkill(25, "부식은 상처를 타고", 2, 20, 0, 0, 0, "독 상태면 추가 피해 + 8", EFF_NONE, 0);
+    SetSkill(24, "그혈관속맹독을", 1, 5, 0, 0, 0, "독 6 부여", EFF_POISON, 7);
+    SetSkill(25, "부식은상처를타고", 2, 20, 0, 0, 0, "독 상태면 추가 피해 + 8", EFF_NONE, 0);
 
     // 불 라인
-    SetSkill(26, "화염 베기", 2, 20, 0, 0, 0, "공격 + 화상 2", EFF_BURN, 2);
+    SetSkill(26, "화염 베기", 2, 20, 0, 0, 0, "공격 + 화상 3", EFF_BURN, 3);
     SetSkill(27, "방화", 1, 0, 0, 0, 0, "화상 6 부여", EFF_BURN, 6);
-    SetSkill(28, "화상은 피부를 타고", 2, 16, 0, 0, 0, "화상 상태면 추가 피해 + 8", EFF_NONE, 0);
+    SetSkill(28, "화상은피부를타고", 2, 16, 0, 0, 0, "화상 상태면 추가 피해 + 8", EFF_NONE, 0);
 
     // 취약/약화 라인 (2층부터 약화 효율을 더 올려줌)
     SetSkill(29, "균열", 1, 6, 0, 0, 0, "공격 + 취약 2", EFF_VULN, 2);
@@ -2099,7 +2060,7 @@ void InitCodex()
     // 방어/공방 카드(2층은 여기서 안정감 생김)
     SetSkill(33, "수비 태세", 2, 0, 22, 0, 0, "높은 방어는 안정감을 높인다", EFF_NONE, 0);
     SetSkill(34, "방패 강타", 1, 10, 8, 0, 0, "방패는 막으라고만 있는게 아니다", EFF_NONE, 0);
-    SetSkill(35, "흡혈 베기", 2, 12, 0, 18, 0, "공격 후 큰 회복", EFF_NONE, 0);
+    SetSkill(35, "흡혈 베기", 2, 12, 0, 16, 0, "공격 후 큰 회복", EFF_NONE, 0);
 
     // ====== 3층 스킬 18개 (36~53) ======
 
@@ -2107,7 +2068,7 @@ void InitCodex()
 // (2층보다 체감 확실히 ↑)
     SetSkill(36, "참격", 1, 18, 0, 0, 0, "높은 공격", EFF_NONE, 0);
     SetSkill(37, "철갑 방어", 1, 0, 14, 0, 0, "높은 방어", EFF_NONE, 0);
-    SetSkill(38, "붕대 감기", 2, 0, 0, 30, 0, "높은 회복", EFF_NONE, 0);
+    SetSkill(38, "붕대 감기", 2, 0, 0, 25, 0, "높은 회복", EFF_NONE, 0);
 
 
     // 0코는 패시브(0코 2회) 때문에
@@ -2129,7 +2090,7 @@ void InitCodex()
     // 취약/약화 컨트롤(3층은 ‘약화로 생존’, ‘취약으로 마무리’)
     SetSkill(47, "신경 절단", 1, 10, 0, 0, 0, "공격 + 약화 3", EFF_WEAK, 3);
     SetSkill(48, "붕괴", 2, 0, 0, 0, 0, "취약 4턴", EFF_VULN, 4);
-    SetSkill(49, "완전 무력화", 2, 0, 0, 0, 0, "약화 5턴", EFF_WEAK, 5);
+    SetSkill(49, "완전 무력화", 2, 0, 0, 0, 0, "약화 4턴", EFF_WEAK, 4);
 
 
     SetSkill(50, "강철 반격", 2, 18, 18, 0, 0, "공격과 방어를 동시에", EFF_NONE, 0);
@@ -2138,7 +2099,7 @@ void InitCodex()
 
     // 52: 취약이면 크게 강해짐, 53: 독/불 둘 중 하나라도 있으면 강해짐
     SetSkill(52, "처형", 2, 28, 0, 0, 0, "취약 상태면 추가 피해 +14", EFF_NONE, 0);
-    SetSkill(53, "종결의 일격", 3, 34, 0, 0, 0, "독/화상 중 하나라도 있으면 추가 피해 +16", EFF_NONE, 0);
+    SetSkill(53, "종결의 일격", 4, 30, 0, 0, 0, "독/화상 중 하나라도 있으면 추가 피해 +16", EFF_NONE, 0);
 
 }
 
@@ -2396,7 +2357,7 @@ Enemy makeBossForFloor(int floor)
 
     if (floor == 0) {
         strcpy_s(e.name, sizeof(e.name), "팔레르모");
-        e.maxHp = 220;
+        e.maxHp = 300;
         e.atk = 12;
         e.expReward = 40;
         e.kind = EN_BOSS_GATEKEEPER;
@@ -2404,7 +2365,7 @@ Enemy makeBossForFloor(int floor)
     else if (floor == 1) {
         // 2층 보스: 타나토스 ((취약 연계)
         strcpy_s(e.name, sizeof(e.name), "타나토스");
-        e.maxHp = 300;
+        e.maxHp = 400;
         e.atk = 14;
         e.expReward = 70;
         e.kind = EN_BOSS_EXECUTIONER;
@@ -2413,16 +2374,16 @@ Enemy makeBossForFloor(int floor)
     else if (floor == 2) {
         // 3층 보스: 팔랑크스 (독/화상)
         strcpy_s(e.name, sizeof(e.name), "팔랑크스");
-        e.maxHp = 360;
+        e.maxHp = 500;
         e.atk = 13;
         e.expReward = 90;
         e.kind = EN_BOSS_PLAGUE_CORE;
     }
 
-    else  if (floor == 3 || floor == 4){
+    else if (floor == 3) {
         strcpy_s(e.name, sizeof(e.name), "???");  // 4층 보스 이름
-        e.maxHp = 420;
-        e.atk = 16;
+        e.maxHp = 650;
+        e.atk = 15;
         e.expReward = 0;
         e.kind = EN_BOSS_FINAL;
     }
@@ -2540,8 +2501,11 @@ int applySkill(Player* p, Enemy* e, int* block, int* energy, Skill* s)
 
     // --- 공격 처리 ---
     if (s->dmg > 0) {
+        
         int base = s->dmg;
-
+       
+        
+       
         // 추가피해(연계) 누적
         int bonusDmg = 0;
 
@@ -2560,6 +2524,8 @@ int applySkill(Player* p, Enemy* e, int* block, int* energy, Skill* s)
         if (s->id == 53 && (e->poison > 0 || e->burn > 0)) bonusDmg += 16; // 종결의 일격
 
         base += bonusDmg;
+
+
 
         int real = CalcPlayerDamage(base, e, p);
         e->hp -= real;
@@ -2639,7 +2605,6 @@ int applySkill(Player* p, Enemy* e, int* block, int* energy, Skill* s)
     return 1;
 }
 
-
 void enemyTurn(Player* p, Enemy* e, int* block)
 {
     if (e->kind == EN_BOSS_FINAL) {
@@ -2647,6 +2612,7 @@ void enemyTurn(Player* p, Enemy* e, int* block)
 
         if (roll < 40) {
             int dmg = 42;
+            if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
             int taken = dmg;
 
             if (*block > 0) {
@@ -2669,6 +2635,7 @@ void enemyTurn(Player* p, Enemy* e, int* block)
         else {
             for (int hit = 0; hit < 2; hit++) {
                 int dmg = 20;
+                if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
                 int taken = dmg;
 
                 if (*block > 0) {
@@ -2697,12 +2664,13 @@ void enemyTurn(Player* p, Enemy* e, int* block)
                 p->vuln += 2;
                 renderMessage("팔레르모의 '유리한 결투' ! 일대를 약화시켰다. (아무 키)");
                 wait_any_key();
-               
+
                 return;
             }
             else if (roll < 40) {
                 // 강공 18
-                int dmg = 18;
+                int dmg = 25;
+                if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
                 int taken = dmg;
 
                 if (*block > 0) {
@@ -2719,8 +2687,9 @@ void enemyTurn(Player* p, Enemy* e, int* block)
                 return;
             }
             else {
-                // 기본 12
-                int dmg = 15;
+                // 기본 15
+                int dmg = 20;
+                if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
                 int taken = dmg;
 
                 if (*block > 0) {
@@ -2742,7 +2711,8 @@ void enemyTurn(Player* p, Enemy* e, int* block)
             if (roll < 30) {
                 // 연속 8 + 8
                 for (int hit = 0; hit < 2; hit++) {
-                    int dmg = 8;
+                    int dmg = 11;
+                    if (e->weak > 0) dmg = dmg * 75 / 100;   // 원래도 e->weak (유지)
                     int taken = dmg;
                     if (*block > 0) {
                         int used = (*block >= taken) ? taken : *block;
@@ -2759,7 +2729,8 @@ void enemyTurn(Player* p, Enemy* e, int* block)
                 return;
             }
             else {
-                int dmg = 20;
+                int dmg = 23;
+                if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
                 int taken = dmg;
 
                 if (*block > 0) {
@@ -2786,7 +2757,8 @@ void enemyTurn(Player* p, Enemy* e, int* block)
         // 1) 취약 부여 + 약한 공격
         if (!phase2) {
             if (roll < 35) {
-                int dmg = 10;
+                int dmg = 20;
+                if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
                 int taken = dmg;
 
                 if (*block > 0) {
@@ -2804,7 +2776,8 @@ void enemyTurn(Player* p, Enemy* e, int* block)
 
             // 2) 기본 공격
             if (roll < 75) {
-                int dmg = 16;
+                int dmg = 26;
+                if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
                 int taken = dmg;
 
                 if (*block > 0) {
@@ -2822,8 +2795,8 @@ void enemyTurn(Player* p, Enemy* e, int* block)
             // 3) 공격(취약이면 추가 피해)
             {
                 int dmg = 18;
-                if (p->vuln > 0) dmg += 14; // 취약 상태면 더 아픔
-
+                if (p->vuln > 0) dmg += 14; // 플레이어 취약 상태면 더 아픔 (이건 p->vuln 맞음)
+                if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
                 int taken = dmg;
                 if (*block > 0) {
                     int used = (*block >= taken) ? taken : *block;
@@ -2842,7 +2815,8 @@ void enemyTurn(Player* p, Enemy* e, int* block)
             if (roll < 30) {
                 // 연속타 2회
                 for (int hit = 0; hit < 2; hit++) {
-                    int dmg = 10;
+                    int dmg = 13;
+                    if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
                     int taken = dmg;
                     if (*block > 0) {
                         int used = (*block >= taken) ? taken : *block;
@@ -2860,8 +2834,8 @@ void enemyTurn(Player* p, Enemy* e, int* block)
             // phase2 빈도 증가
             {
                 int dmg = 20;
-                if (p->vuln > 0) dmg += 18;
-
+                if (p->vuln > 0) dmg += 18;   // 플레이어 취약시 추가피해 (p->vuln 맞음)
+                if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
                 int taken = dmg;
                 if (*block > 0) {
                     int used = (*block >= taken) ? taken : *block;
@@ -2870,7 +2844,7 @@ void enemyTurn(Player* p, Enemy* e, int* block)
                 }
                 if (taken > 0) { p->HP -= taken; if (p->HP < 0) p->HP = 0; }
 
-                renderMessage("타나토스의‘브레이브 재퍼’! (아무 키)");
+                renderMessage("타나토스의'브레이브 재퍼'! (아무 키)");
                 wait_any_key();
                 return;
             }
@@ -2897,12 +2871,12 @@ void enemyTurn(Player* p, Enemy* e, int* block)
             return;
         }
 
-        // 2) 기본 공격 (상태이상 있으면 추가)
+        // 2) 기본 공격 (플레이어 상태이상 있으면 추가)
         if (roll < (phase2 ? 80 : 60)) {
-            int dmg = 15;
-            if (p->poison > 0) dmg += 4;
-            if (p->burn > 0)   dmg += 4;
-
+            int dmg = 28;
+            if (p->poison > 0) dmg += 4;   // 플레이어가 독 상태면 추가피해 (p->poison 맞음)
+            if (p->burn > 0)   dmg += 4;   // 플레이어가 화상 상태면 추가피해 (p->burn 맞음)
+            if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
             int taken = dmg;
             if (*block > 0) {
                 int used = (*block >= taken) ? taken : *block;
@@ -2918,9 +2892,9 @@ void enemyTurn(Player* p, Enemy* e, int* block)
 
         // 3) 플레이어 상태이상 기반 큰 피해
         {
-            int dmg = 12 + (p->poison / 2) + (p->burn / 2);
-            if (phase2) dmg += 8;
-
+            int dmg = 18 + (p->poison / 2) + (p->burn / 2);
+            if (phase2) dmg += 10;
+            if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
             int taken = dmg;
             if (*block > 0) {
                 int used = (*block >= taken) ? taken : *block;
@@ -2940,30 +2914,70 @@ void enemyTurn(Player* p, Enemy* e, int* block)
 
     // ===== 강적: 늪사냥꾼(플레이어 독 부여) =====
     if (e->kind == EN_ELITE_HUNTER) {
-        int dmg = e->atk; // 8
-        int taken = dmg;
 
-        if (*block > 0) {
-            int used = (*block >= taken) ? taken : *block;
-            *block -= used;
-            taken -= used;
-        }
-        if (taken > 0) {
-            p->HP -= taken;
-            if (p->HP < 0) p->HP = 0;
-        }
+        int roll = rand() % 100;
 
-        p->poison += 2; //  플레이어 독 2
-        if (p->poison > 30) p->poison = 30;
-        renderMessage("늪사냥꾼의 공격! 독 2가 스민다. (아무 키)");
-        wait_any_key();
-        return;
+        if (roll < 60) {
+            // 패턴 A: 기본공격 + 독2
+            int dmg = e->atk;
+            if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
+
+            int taken = dmg;
+            if (*block > 0) {
+                int used = (*block >= taken) ? taken : *block;
+                *block -= used;
+                taken -= used;
+            }
+            if (taken > 0) {
+                p->HP -= taken;
+                if (p->HP < 0) p->HP = 0;
+            }
+
+            p->poison += 2;
+            if (p->poison > 30) p->poison = 30;
+
+            renderMessage("늪사냥꾼의 공격! 독 2가 스민다. (아무 키)");
+            wait_any_key();
+            return;
+        }
+        else if (roll < 85) {
+            // 패턴 B: 강공(독 없음)
+            int dmg = e->atk + 8;
+            if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
+
+            int taken = dmg;
+            if (*block > 0) {
+                int used = (*block >= taken) ? taken : *block;
+                *block -= used;
+                taken -= used;
+            }
+            if (taken > 0) {
+                p->HP -= taken;
+                if (p->HP < 0) p->HP = 0;
+            }
+
+            renderMessage("늪사냥꾼의 강공! (아무 키)");
+            wait_any_key();
+            return;
+        }
+        else {
+            // 패턴 C
+            p->weak += 2;   // 플레이어 약화 1
+            if (p->weak > 30) p->weak = 30;
+
+            renderMessage("늪사냥꾼의 함정! 약화 1 (아무 키)");
+            wait_any_key();
+            return;
+        }
     }
+
 
     // ===== 강적: 부패한 기사(방어 관통 + 취약) =====
     if (e->kind == EN_ELITE_KNIGHT) {
         int roll = rand() % 100;
         int dmg = (roll < 30) ? 14 : 11; // 특수 30%
+        if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
+
         int piercePct = 30; // 방어 관통 30%
 
         // 관통 피해(방어 무시)
@@ -2996,6 +3010,7 @@ void enemyTurn(Player* p, Enemy* e, int* block)
     if (e->kind == EN_ELITE_GUARD) {
         int roll = rand() % 100;
         int dmg = (roll < 30) ? (e->atk + 6) : e->atk; // 30% 강공
+        if (e->weak > 0) dmg = dmg * 75 / 100;   // ← 수정: e->weak
         int taken = dmg;
 
         if (*block > 0) {
@@ -3034,6 +3049,10 @@ void enemyTurn(Player* p, Enemy* e, int* block)
     }
 
     int dmg = e->atk + (e->intent == 1 ? 5 : 0);
+
+    if (e->weak > 0) {                  // ← 수정: e->weak
+        dmg = dmg * 75 / 100;
+    }
     int taken = dmg;
 
     if (*block > 0) {
@@ -3070,7 +3089,151 @@ void RespawnAtCheckpoint(Player* p)
     p->HP = p->maxHP;
 }
 
-int battleLoop(Player* p, EncounterType type)
+void renderMaze(Player* p, char map[H][W + 1])
+{
+    int ox = M_X + 2;
+    int oy = M_Y + 2;
+
+    for (int y = 0; y < H; y++) {
+        gotoxy(ox, oy + y);
+        for (int x = 0; x < W; x++) {
+
+            // 미탐색이면 그냥 비움
+            if (!p->seen[p->floor][y][x]) {
+                printf("  ");
+                continue;
+            }
+
+            // 플레이어는 항상 표시
+            if (p->x == x && p->y == y) {
+                printf("%c ", dirchar(p->dir));
+                continue;
+            }
+
+            if (map[y][x] == '#') {
+                printf("##");
+            }
+            else {
+                char t = map[y][x];
+                if (t == 'B' || t == 'C' || t == 'S' || t == 'E' || t == 'U' || t == 'I' || t == '!' || t == '@')
+                    printf("%c ", t);
+                else
+                    printf("  ");
+            }
+        }
+    }
+}
+void DrawTopInfo(Player* p)
+{
+    gotoxy(42, 3);
+    printf("%d층   ", p->floor + 1);
+
+    gotoxy(47, 3);
+    printf("%-20s", "");
+    gotoxy(47, 3);
+    printf("체크포인트 %c", p->hasCheckpoint ? 'O' : 'X');
+}
+void narrationPhal(Player*p, char map[H][W + 1])
+{
+    DB_BeginFrame();
+
+    NarrHeader();
+    printf("                                                 [Enter] 다음\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                「끝났네…」 \n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 기나긴 혈투 끝에 팔랑크스는 무너졌다\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                「아니, 끝난 건 아니지」 \n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 당신은 심장을 겨낭한후 칼을 꼿아 넣는다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                「...뭐야..?」 \n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 그러나 느껴지는건 없다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 당신이 잡은것은 그저 '껍데기' 일 뿐이다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 마치 곤충의 껍질같은 지금의 팔랑크스는 그저 껍질이다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 던전에서 나갈수있는 귀환석은 보이지 않는다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 던전이 떨리며 문이 열린다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 만약 나아간다면 두 번 다신 이곳에 올 수 없을것이다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 만일을 위해 이 층에서 준비를 하는 것이 현명하다.\n\n");
+    DB_Present();
+    waitenter();
+    DB_BeginFrame();
+    drawUIFrame();
+    playerstate(p);
+    DrawPassiveUI(p);
+    renderSkillBookObject();
+    renderMaze(p, map);
+    DrawTopInfo(p);
+    gotoxy(42, 22);
+    printf("이동:W S | 방향전환:A D | 스킬 북:E | 일지:J |물약:P | 목숨을끊는다:Q");
+    renderMessage(pickRandomLine());
+    DB_Present();  // ← 이 줄 추가!
+}
+void narrationp_end(Player* p, char map[H][W + 1])
+{
+    DB_BeginFrame();
+    NarrHeader();
+    printf("                                                 [Enter] 다음\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                「죽였다」 \n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 알수없는 생명체는 눈 앞에 죽어있다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 그렇지만 귀환석은 보이지않는다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                「왜...안..보이건데..젠장!」\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 던전은 다시 움직인다. \n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 문이열린다.\n\n");
+    DB_Present();
+    waitenter();
+    printf("                                                 나아간다 다시.\n\n");
+    DB_Present();
+    waitenter();
+   
+    DB_Present();
+    waitenter();
+    DB_BeginFrame();
+    drawUIFrame();
+    playerstate(p);
+    DrawPassiveUI(p);
+    renderSkillBookObject();
+    renderMaze(p, map);
+    DrawTopInfo(p);
+    gotoxy(42, 22);
+    printf("이동:W S | 방향전환:A D | 스킬 북:E | 일지:J |물약:P | 목숨을끊는다:Q");
+    renderMessage(pickRandomLine());
+    DB_Present();  // ← 이 줄 추가!
+}
+
+int battleLoop(Player* p, EncounterType type, char map[H][W + 1])
 {
     Enemy enemy;
     memset(&enemy, 0, sizeof(enemy));
@@ -3081,7 +3244,9 @@ int battleLoop(Player* p, EncounterType type)
     int canEscape = (type != ENC_BOSS);
     int energyMax = PlayerEnergyMax(p);
     int energy = energyMax;
-
+    if (HasPassive(p, PASSIVE_FINAL_PREP)) {
+        energy += 2;
+    }
     int block = 0;
     int selected = 0;
 
@@ -3099,7 +3264,8 @@ int battleLoop(Player* p, EncounterType type)
 
     while (1) {
         if (enemy.hp <= 0) {
-            int g = 5 + rand() % 8;
+            p->gritUsed = 0;
+            int g = 10 + rand() % 8;
             int bonusG = PassiveKillGoldBonus(p);
             p->gold += (g + bonusG);
 
@@ -3110,27 +3276,37 @@ int battleLoop(Player* p, EncounterType type)
 
             gainExp(p, enemy.expReward);
 
-            if ((rand() % 100) < 10) {
+            if ((rand() % 100) < 35) {
                 renderMessage("보상 발견! 스킬 1개 해금. 아무 키.");
                 wait_any_key();
                 UnlockOneSkill(p, p->floor);
             }
             if (enemy.kind == EN_BOSS_PLAGUE_CORE) {
-                narrationPhal();
+                narrationPhal(p,map);
               
             }
             if (enemy.kind == EN_BOSS_FINAL)
             {
-                narrationp_end();
+                narrationp_end(p,map);
             }
             return 1;
         }
 
         if (p->HP <= 0) {
-            renderMessage("패배... 체크포인트로 이동한다. 아무 키.");
-            wait_any_key();
-            RespawnAtCheckpoint(p);
-            return 0;
+          
+            if (HasPassive(p, PASSIVE_GRIT_HEART) && p->gritUsed == 0) {
+                p->gritUsed = 1;
+                p->HP = p->maxHP * 30 / 100;
+                renderMessage("집념의 심장 발동! 체력 30%로 부활! (아무 키)");
+                wait_any_key();
+            }
+            else {
+                // 기존 패배 처리
+                renderMessage("패배... 체크포인트로 이동한다. 아무 키.");
+                wait_any_key();
+                RespawnAtCheckpoint(p);
+                return 0;
+            }
         }
 
         DB_BeginFrame();
@@ -3248,29 +3424,7 @@ int battleLoop(Player* p, EncounterType type)
 // --------------------
 // 랜덤 문장
 // --------------------
-const char* pickRandomLine()
-{
-    static const char* lines[] = {
-        "음습한 던전 속에서 고요함이 느껴진다...",
-        ".....",
-        "어둠 속에서 청각이 예민해진 기분이다..",
-         ".....",
-        "이 길이 맞는 것 같은 느낌이든다.",
-         ".....",
-        "뭔가 수상한 기운이 느껴진다.",
-         ".....",
-        "무언의 압박감이 느껴진다...",
-         ".....",
-        "발소리가 들린다.",
-         ".....",
-        "떨리는 심장의 파동이 온 몸을 관통한다.",
-         ".....",
-        "정적 속에서 심장 소리만이 또렷이 들린다."
-         ".....",
-    };
-    int count = (int)(sizeof(lines) / sizeof(lines[0]));
-    return lines[rand() % count];
-}
+
 
 void renderAction(int ch)
 {
@@ -3332,45 +3486,94 @@ int moveBack(Player* p, char map[H][W + 1])
 int checkEncounterAfterSafeMoves(Player*p)
 {
     if (p->floor == 3) return 0;
+    if (p->floor == 4) return 0;
 
     moveCountSinceLastBattle++;
-    if (moveCountSinceLastBattle <= 10) return 0;
-    return (rand() % 100) < 35;
+    if (moveCountSinceLastBattle <= 14) return 0;
+    return (rand() % 100) < 30;
 }
 
-void renderMaze(Player* p, char map[H][W + 1])
+void shownarration_G()
 {
-    int ox = M_X + 2;
-    int oy = M_Y + 2;
+    NarrHeader();
+    printf("                                                「아....」");
+    waitenter();
+    printf("                                                「아....아아..」");
+    waitenter();
+    printf("                                                「아....아...하..」");
+    waitenter();
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    printf("                                                 %$#$$!@#$#$@#$#$@");
+    waitenter();
+    printf("                                                「q」");
+    waitenter();
+    printf("                                                「어서」");
+    waitenter();
+    printf("                                                  어서$%%@#$$%@세요");
+    waitenter();
+    printf("                                                  q : 목숨을 끊는다");
+    waitenter();
+    printf("                                                     q : 목숨을 끊는다");
+    waitenter();
+    printf("                                                   q : 목숨을 끊는다");
+    waitenter();
+    printf("                                                  q : 목숨을 끊는다");
+    waitenter();
+    printf("                                                    q : 목숨을 끊는다");
+    printf("                                                 q : 목숨을 끊는다");
+    waitenter();
+    printf("                                                    q : 목숨을 끊는다");
+    waitenter();
+    printf("                                                 q : 목숨을 끊는다");
+    waitenter();
+    printf("                                                  q : 목숨을 끊는다");
+    waitenter();
+    printf("                                                 q : 목숨을 끊는다");
+}
 
-    for (int y = 0; y < H; y++) {
-        gotoxy(ox, oy + y);
-        for (int x = 0; x < W; x++) {
+void DoGEvent(Player* p)
+{
+    DB_BeginFrame();
+    NarrHeader();
+    printf("                                                 [Enter] 다음\n\n");
+    waitenter();
+    printf("                                                「보았다」 \n\n");
+    waitenter();
+    printf("                                                 당신은 ??? 보았다.\n\n");
+    waitenter();
+    printf("                                                 $#%$@#$@@$#$#$$#&&%\n\n");
+    waitenter();
+    printf("                                                 당신은 @&%???#$ 보았다.\n\n");
+    waitenter();
+    printf("                                                「왜...?..내가」\n\n");
+    waitenter();
+    printf("                                                 이유는 없다. 예정이기에 운명이기에 \n\n");
+    waitenter();
+    printf("                                                 당신은 #@%$%#@새#%신#$을보았을 뿐이다. \n\n");
+    waitenter();
+    printf("                                                「.....아」 \n\n");
+    waitenter();
+    printf("                                                 어서 목숨을 끊는다. \n\n");
+    waitenter();
+    printf("                                                 'Q' \n\n");
+    waitenter();
+    DB_Present();
 
-            // 미탐색이면 그냥 비움
-            if (!p->seen[p->floor][y][x]) {
-                printf("  ");
-                continue;
-            }
-
-            // 플레이어는 항상 표시
-            if (p->x == x && p->y == y) {
-                printf("%c ", dirchar(p->dir));
-                continue;
-            }
-
-            if (map[y][x] == '#') {
-                printf("##");
-            }
-            else {
-                char t = map[y][x];
-                if (t == 'B' || t == 'C' || t == 'S' || t == 'E' || t == 'U' || t == 'I' || t == '!' || t == '@')
-                    printf("%c ", t);
-                else
-                    printf("  ");
-            }
-        }
-    }
+    shownarration_G();
 }
 
 
@@ -3386,10 +3589,10 @@ void LoadMapForFloor(int floor, char map[H][W + 1])
         "#I............I..C#B............#",
         "######.####################..####",
         "#....#.#.........U#.............#",
-        "#..B.#.#I.........###.#.........#",
+        "#..B.#.#..........###.#.........#",
         "#....#.########.##..#.####!######",
         "#....................C#.........#",
-        "#.#####.#.............#....######",
+        "#I#####.#.............#....######",
         "#.....#.###############...C######",
         "#....S#...........#B.........@.E#",
         "#################################"
@@ -3447,7 +3650,7 @@ void LoadMapForFloor(int floor, char map[H][W + 1])
     const char* base5[H] = {
        "#################################",
        "#...#@@@@@@@@@@@@@@@@@@@@@@@@@@@#",
-       "#...#@@@@@@@@@@@@@@@@@@@@@@@@@@@#",
+       "#..G#@@@@@@@@@@@@@@@@@@@@@@@@@@@#",
        "#####@@@@@@@@@@@@@@@@@@@@@@@@@@@#",
        "#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#",
        "#@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@#",
@@ -3471,16 +3674,7 @@ void LoadMapForFloor(int floor, char map[H][W + 1])
 }
 
 // 체크포인트
-void DrawTopInfo(Player* p)
-{
-    gotoxy(42, 3);
-    printf("%d층   ", p->floor + 1);
 
-    gotoxy(47, 3);
-    printf("%-20s", "");
-    gotoxy(47, 3);
-    printf("체크포인트 %c", p->hasCheckpoint ? 'O' : 'X');
-}
 
 void HandleTileEvent(Player* p, char map[H][W + 1])
 {
@@ -3531,13 +3725,15 @@ void HandleTileEvent(Player* p, char map[H][W + 1])
     }
 
     if (t == 'S') {
+      
         renderMessage("상인을 만났다! (아무 키)");
         wait_any_key();
 
         ClearPendingInputSafe();
+        PlaySound(TEXT("sound/bgm/lost_haven_shillings.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
         OpenShop(p);
         ClearPendingInputSafe();
-       
+        PlaySound(TEXT("sound/bgm/Unknowable.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
         // 메인화면다시 생성
         DB_BeginFrame();
         drawUIFrame();
@@ -3584,7 +3780,7 @@ void HandleTileEvent(Player* p, char map[H][W + 1])
     }
 
     if (t == 'U') {
-        renderMessage("제단 발견! 등가교환이 가능하다. 아무 키.");
+        renderMessage("제단 발견! 선택이 가능하다. 아무 키.");
         wait_any_key();
         AltarEvent(p);
         system("cls");
@@ -3604,27 +3800,40 @@ void HandleTileEvent(Player* p, char map[H][W + 1])
     if (t == '!') {
         renderMessage("강적의 기척이 느껴진다..  전투 시작. 아무 키.");
         wait_any_key();
-        battleLoop(p, ENC_ELITE);
+        PlaySound(TEXT("sound/bgm/alllmer_bells.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+        battleLoop(p, ENC_ELITE, map);
+        PlaySound(TEXT("sound/bgm/Unknowable.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+        DrawTopInfo(p);
         map[p->y][p->x] = '.';
         return;
     }
 
     if (t == '@') {
-
-        if (p->floor == 4) { 
+       
+        if (p->floor == 3) { 
             renderMessage("…… '???'.  아무 키.");
             wait_any_key();
-
-            battleLoop(p, EN_BOSS_FINAL);
+            PlaySound(TEXT("sound/bgm/secret_song.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+            battleLoop(p, ENC_BOSS, map);
+            PlaySound(TEXT("sound/bgm/Unknowable.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
             
             return;
         }
         renderMessage("지금까지 보았던 적들과 확연히 다르다.  아무 키.");
         wait_any_key();
-        battleLoop(p, ENC_BOSS);
+        PlaySound(TEXT("sound/bgm/horns_and_anxiety.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+        battleLoop(p, ENC_BOSS, map);
+        PlaySound(TEXT("sound/bgm/Unknowable.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
         map[p->y][p->x] = '.';
         return;
     }
+
+    if (t == 'G') {
+        DoGEvent(p);      
+        map[p->y][p->x] = '.';  
+        return;          
+    }
+
 
     if (t == 'E') {
         p->floor++;
@@ -3788,10 +3997,10 @@ void qnarration_end(Player* p)
 // 던전 루프
 void dungeonLoop(Player* p)
 {
-  
+   
     char map[H][W + 1];
     LoadMapForFloor(p->floor, map);
-
+    PlaySound(TEXT("sound/bgm/Unknowable.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
     if (p->x == 0 && p->y == 0) {
         p->x = 1;
         p->y = 1;
@@ -3817,6 +4026,7 @@ void dungeonLoop(Player* p)
     DB_Present();
 
     while (1) {
+      
         int moved = 0;
         int ch = readKey();
 
@@ -3944,7 +4154,7 @@ void dungeonLoop(Player* p)
                 renderMessage("적의 기척이 느껴진다... 아무 키.");
                 wait_any_key();
 
-                battleLoop(p, ENC_NORMAL);
+                battleLoop(p, ENC_NORMAL, map);
 
                 moveCountSinceLastBattle = 0;
                 RevealForward2(p, map);
@@ -3977,10 +4187,18 @@ void dungeonLoop(Player* p)
 // --------------------
 int main()
 {
+  
+
+
     // 해야할것
-   
-    // 엔딩 루트 2개 추가
-    // 이벤트
+    // 고정이벤트(시간이 없다. 폐기)
+    // 엔딩 루트 (폐기 시간 없음)
+    // 5층 보스추가 (완)(근데약간 문제있음)
+    // 나래이션 화면 (수정이 안됨, 그냥 알리는 걸로)
+    // 밸런스가 조금 이상함 쉬운지 모르겠음
+    // 카드 밸런스는 이정도면 됬다
+    // 약화가 적용이 안됨미칠거같음
+    // 독이 좀 약한듯(수정할지도)
 
     Player player;
     memset(&player, 0, sizeof(player));
@@ -3990,7 +4208,7 @@ int main()
 
     DB_Init();
     DB_PrimeBeforeTitle();
-    
+    startback();
     showStartScreen();
 
     showNarration(&player);
@@ -3998,10 +4216,10 @@ int main()
     srand((unsigned)time(NULL));
     InitCodex();
 
-    strcpy_s(player.name, sizeof(player.name), "방랑자");
+    //strcpy_s(player.name, sizeof(player.name), "방랑자");
     player.gold = 20;
 
-    player.maxHP = 80;
+    player.maxHP = 65;
     player.HP = player.maxHP;
 
     player.x = 1;
@@ -4031,7 +4249,7 @@ int main()
     player.passiveCount = 0;
 
     for (int i = 0; i < POT_COUNT; i++) player.potions[i] = 0;
-
+    player.gritUsed = 0;
     drawUIFrame();
     playerstate(&player);
     DrawPassiveUI(&player);
