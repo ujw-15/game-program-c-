@@ -515,7 +515,7 @@ int CalcPlayerDamage(int base, Enemy* e, Player* p)
     int dmg = base;
 
     // 약화: 주는 피해 감소
-    if (e->weak > 0) {
+    if (p->weak > 0) {
         dmg = dmg * 65 / 100; // Reduce damage by 35%
     }
 
