@@ -3543,6 +3543,8 @@ void shownarration_G()
     printf("                                                  q : 목숨을 끊는다");
     waitenter();
     printf("                                                 q : 목숨을 끊는다");
+    printf("                                                  심연");
+    printf("                                                  ENDING : 목도");
 }
 
 void DoGEvent(Player* p)
@@ -3989,11 +3991,7 @@ void qnarration(Player* p)
     DB_Present();
 }
 
-void qnarration_end(Player* p)
-{
-    NarrHeader();
-    printf("                                                  목숨을 끊는다.");
-}
+
 // 던전 루프
 void dungeonLoop(Player* p)
 {
@@ -4038,7 +4036,7 @@ void dungeonLoop(Player* p)
             }
             else {
                 // 4층에서부터는 실제 종료
-                qnarration_end(p);        // 필요하면 "게임이 끝난다" 대사
+                
                 break;                    // 또는 exit(0);
             }
         }
